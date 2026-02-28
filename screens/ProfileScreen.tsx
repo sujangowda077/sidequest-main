@@ -24,21 +24,22 @@ const [alertTitle, setAlertTitle] = useState('');
 const [alertMessage, setAlertMessage] = useState('');
 
 const confirmActionRef = useRef<null | (() => void)>(null);
+const [showCancel, setShowCancel] = useState(false);
+const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
 
 function showAlert(
   title: string,
   message: string,
-  onConfirm?: () => void
+  onConfirm?: () => void,
+  showCancel: boolean = false,
+  type: 'success' | 'error' | 'warning' | 'info' = 'info'
 ) {
   setAlertTitle(title);
   setAlertMessage(message);
   setAlertVisible(true);
-
-  if (onConfirm) {
-    confirmActionRef.current = onConfirm;
-  } else {
-    confirmActionRef.current = null;
-  }
+  confirmActionRef.current = onConfirm || null;
+  setShowCancel(showCancel);
+  setAlertType(type);
 }
   const [profile, setProfile] = useState<any>(null);
   const [devEnabled, setDevEnabled] = useState(false);
@@ -183,7 +184,7 @@ function showAlert(
    // Only run OCR on mobile
    // You can re-add your TextRecognition logic here later
    // For now, we'll just mark all uploads as needing manual review
-   
+
 }
       
       try {
@@ -338,7 +339,8 @@ function showAlert(
   showAlert(
     "Sign Out",
     "Are you sure you want to sign out?",
-    handleSignOut
+    handleSignOut,
+    true
   );
 }}
             style={{ padding: 10, backgroundColor: 'rgba(255, 71, 87, 0.1)', borderRadius: 12 }}
@@ -380,7 +382,17 @@ function showAlert(
                 <Text style={{color:'white', fontSize: 32, fontWeight:'bold'}}>⚡ {profile?.mana_balance || 0}</Text>
                 <Text style={{color:'rgba(255,255,255,0.8)', fontSize: 12}}>≈ ₹{(profile?.mana_balance || 0) / 100}</Text>
             </View>
-            <TouchableOpacity onPress={handleWithdraw} style={{backgroundColor:'white', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12}}>
+            <TouchableOpacity
+  onPress={handleWithdraw}
+  disabled={(profile?.mana_balance || 0) < 1000}
+  style={{
+    backgroundColor:
+      (profile?.mana_balance || 0) < 1000 ? '#ccc' : 'white',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 12
+  }}
+>
                 <Text style={{color:'#8E2DE2', fontWeight:'bold'}}>Withdraw</Text>
             </TouchableOpacity>
         </View>
@@ -544,19 +556,32 @@ function showAlert(
         </View>
       </Modal>
       {/* 🔔 Custom Alert Modal */}
-<Modal visible={alertVisible} transparent animationType="fade">
-  <View style={{
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20
-  }}>
+<Modal
+  visible={alertVisible}
+  transparent
+  animationType="fade"
+  statusBarTranslucent
+>
+  <KeyboardAvoidingView
+    behavior={Platform.OS === "ios" ? "padding" : undefined}
+    style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    }}
+  >
     <View style={{
       backgroundColor: colors.card,
       padding: 20,
       borderRadius: 16,
-      width: '100%'
+      width: '100%',
+      maxWidth: 400
     }}>
       <Text style={{
         fontSize: 18,
@@ -574,20 +599,60 @@ function showAlert(
         {alertMessage}
       </Text>
 
-      <TouchableOpacity
-      onPress={() => {
-        setAlertVisible(false);
-        if (confirmActionRef.current) {
-            confirmActionRef.current();
-        }
+      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+
+  {showCancel && (
+    <TouchableOpacity
+      onPress={() => setAlertVisible(false)}
+      style={{
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#ccc',
+        marginRight: 10
+      }}
+    >
+      <Text style={{
+        fontWeight: 'bold',
+        fontSize: 16,
+        color: colors.text
+      }}>
+        Cancel
+      </Text>
+    </TouchableOpacity>
+  )}
+
+  <TouchableOpacity
+    onPress={() => {
+      setAlertVisible(false);
+      if (confirmActionRef.current) {
+        confirmActionRef.current();
+      }
     }}
-      >
-        <Text style={{ color: 'black', fontWeight: 'bold' }}>
-          OK
-        </Text>
-      </TouchableOpacity>
+    style={{
+      flex: 1,
+      backgroundColor: '#00E676',
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}
+  >
+    <Text style={{
+      color: 'black',
+      fontWeight: 'bold',
+      fontSize: 16
+    }}>
+      Confirm
+    </Text>
+  </TouchableOpacity>
+
+</View>
     </View>
-  </View>
+  </KeyboardAvoidingView>
 </Modal>
 
       <TermsModal visible={showTerms} onClose={() => setShowTerms(false)} showAgreeButton={false} />

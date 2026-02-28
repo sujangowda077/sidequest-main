@@ -675,19 +675,20 @@ function showAlert(
             <Modal visible={alertVisible} transparent animationType="fade">
   <View style={{
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20
   }}>
     <View style={{
       backgroundColor: colors.card,
-      padding: 20,
-      borderRadius: 16,
-      width: '100%'
+      padding: 25,
+      borderRadius: 20,
+      width: '100%',
+      maxWidth: 400
     }}>
       <Text style={{
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
         color: colors.text,
         marginBottom: 10
@@ -696,25 +697,52 @@ function showAlert(
       </Text>
 
       <Text style={{
-        color: '#888',
-        marginBottom: 20
+        color: '#aaa',
+        marginBottom: 25,
+        lineHeight: 20
       }}>
         {alertMessage}
       </Text>
 
-      <TouchableOpacity
-        onPress={() => setAlertVisible(false)}
-        style={{
-          backgroundColor: '#00E676',
-          padding: 12,
-          borderRadius: 10,
-          alignItems: 'center'
-        }}
-      >
-        <Text style={{ color: 'black', fontWeight: 'bold' }}>
-          OK
-        </Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        {alertButtons.map((btn, index) => (
+          <TouchableOpacity
+            key={index}
+            onPress={() => {
+              setAlertVisible(false);
+              if (btn.onPress) btn.onPress();
+            }}
+            style={{
+              flex: 1,
+              paddingVertical: 14,
+              borderRadius: 14,
+              alignItems: 'center',
+              backgroundColor:
+                index === alertButtons.length - 1
+                  ? '#00E676'
+                  : 'transparent',
+              borderWidth:
+                index === alertButtons.length - 1 ? 0 : 1,
+              borderColor:
+                index === alertButtons.length - 1
+                  ? 'transparent'
+                  : '#555'
+            }}
+          >
+            <Text
+              style={{
+                fontWeight: 'bold',
+                color:
+                  index === alertButtons.length - 1
+                    ? 'black'
+                    : 'white'
+              }}
+            >
+              {btn.text}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   </View>
 </Modal>

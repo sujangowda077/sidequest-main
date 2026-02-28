@@ -193,12 +193,51 @@ export default function App() {
       {!session ? (
         <AuthScreen />
       ) : (
-        <Tab.Navigator screenOptions={{ headerShown: false }}>
-          <Tab.Screen name="Buzz">
+        <Tab.Navigator
+        
+        id="main-tabs"
+  screenOptions={{
+    headerShown: false,
+
+    tabBarStyle: {
+      backgroundColor: '#111',
+      borderTopWidth: 0,
+      height: 70,
+      paddingBottom: 10,
+      paddingTop: 10,
+    },
+    tabBarItemStyle: {
+  paddingVertical: 5,
+},
+
+    tabBarLabelStyle: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    tabBarActiveTintColor: '#00E676',
+    tabBarInactiveTintColor: '#777',
+  }}
+>
+          <Tab.Screen
+  name="Buzz"
+  options={{
+    tabBarIcon: ({ color, size }) => (
+      <Zap color={color} size={size} />
+    ),
+  }}
+>
             {() => <HomeScreen userEmail={session.user.email} />}
           </Tab.Screen>
 
-          <Tab.Screen name="Food Run">
+          <Tab.Screen
+  name="Food Run"
+  options={{
+    tabBarIcon: ({ color, size }) => (
+      <Utensils color={color} size={size} />
+    ),
+  }}
+>
             {() => (
               <ErrandScreen
                 userId={session.user.id}
@@ -207,7 +246,14 @@ export default function App() {
             )}
           </Tab.Screen>
 
-          <Tab.Screen name="Menus">
+          <Tab.Screen
+  name="Menus"
+  options={{
+    tabBarIcon: ({ color, size }) => (
+      <BookOpen color={color} size={size} />
+    ),
+  }}
+>
             {() => (
               <MenuScreen
                 userId={session.user.id}
@@ -217,7 +263,14 @@ export default function App() {
             )}
           </Tab.Screen>
 
-          <Tab.Screen name="Print Shop">
+          <Tab.Screen
+  name="Print Shop"
+  options={{
+    tabBarIcon: ({ color, size }) => (
+      <Printer color={color} size={size} />
+    ),
+  }}
+>
             {() => (
               <PrintScreen
                 userId={session.user.id}
@@ -227,7 +280,14 @@ export default function App() {
             )}
           </Tab.Screen>
 
-          <Tab.Screen name="Tutors">
+          <Tab.Screen
+  name="Tutors"
+  options={{
+    tabBarIcon: ({ color, size }) => (
+      <GraduationCap color={color} size={size} />
+    ),
+  }}
+>
             {() => (
               <TutorScreen
                 userId={session.user.id}
@@ -236,7 +296,14 @@ export default function App() {
             )}
           </Tab.Screen>
 
-          <Tab.Screen name="Profile">
+          <Tab.Screen
+  name="Profile"
+  options={{
+    tabBarIcon: ({ color, size }) => (
+      <User color={color} size={size} />
+    ),
+  }}
+>
             {() => <ProfileScreen session={session} />}
           </Tab.Screen>
         </Tab.Navigator>
