@@ -10,9 +10,10 @@ import { isDevUser, setDevMode, getDevMode } from '../lib/devMode';
 import TermsModal from '../components/TermsModal'; 
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
-import TextRecognition from '@react-native-ml-kit/text-recognition'; 
+import { useRef } from 'react';
 import { useTheme } from '@react-navigation/native';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 
 
 export default function ProfileScreen({ session, isLockdown }: { session: any, isLockdown?: boolean }) {
@@ -21,11 +22,22 @@ export default function ProfileScreen({ session, isLockdown }: { session: any, i
 const [alertVisible, setAlertVisible] = useState(false);
 const [alertTitle, setAlertTitle] = useState('');
 const [alertMessage, setAlertMessage] = useState('');
+const confirmActionRef = useRef<null | (() => void)>(null);
 
-function showAlert(title: string, message: string) {
+function showAlert(
+  title: string,
+  message: string,
+  onConfirm?: () => void
+) {
   setAlertTitle(title);
   setAlertMessage(message);
   setAlertVisible(true);
+
+  if (onConfirm) {
+    confirmActionRef.current = onConfirm;
+  } else {
+    confirmActionRef.current = null;
+  }
 }
   const [profile, setProfile] = useState<any>(null);
   const [devEnabled, setDevEnabled] = useState(false);
@@ -163,54 +175,11 @@ function showAlert(title: string, message: string) {
       }
 
       setUploading(true);
+      // Web-safe: Skip OCR, always send for manual verification
+      let isAiVerified = false;
       
       try {
-          console.log("Scanning ID...");
-          const recognitionResult = await TextRecognition.recognize(image.uri);
-          const extractedText = recognitionResult.text.toLowerCase();
           
-          // Broader keywords list to detect any valid ID
-          const keywords = ["student", "campus", "university", "college", "school", "id", "identity", "card", "no", "usn", "reg", "enrollment", "technologies", "engineering", "management"];
-          
-          // Check if at least 2 keywords are found to confirm it's likely an ID card
-          const foundKeywords = keywords.filter(word => extractedText.includes(word));
-          const looksLikeId = foundKeywords.length >= 2;
-
-          // Check for name match (optional bonus)
-          const currentName = (tempName || profile?.full_name || "").toLowerCase();
-          let nameMatch = false;
-          if (currentName.length > 2) {
-              const nameParts = currentName.split(" "); 
-              nameMatch = nameParts.some((part: string) => part.length > 2 && extractedText.includes(part));
-          }
-
-          let isAiVerified = false;
-          
-          // 🟢 LOGIC: 
-          // 1. If it looks like an ID and Name matches -> Verified immediately.
-          // 2. If it looks like an ID but Name doesn't match -> Upload for Manual Review.
-          // 3. If it doesn't look like an ID -> Reject (Attempt 1) or Manual Review (Attempt 2).
-
-          if (looksLikeId && nameMatch) {
-               isAiVerified = true;
-               setOcrAttempts(0); // Reset on success
-          } else if (!looksLikeId) {
-               // FAILED RECOGNITION
-               if (ocrAttempts < 1) {
-                   setUploading(false);
-                   setOcrAttempts(prev => prev + 1);
-                   showAlert("Image Unclear 📸", "We couldn't clearly detect a Student ID.\n\nPlease ensure good lighting, no glare, and try again.");
-                   return; // STOP HERE
-               } else {
-                   // Second Failure: Allow upload but force manual review
-                   showAlert("Auto-Check Failed", "We still couldn't read your ID. Sending for Manual Admin Verification.");
-                   isAiVerified = false;
-               }
-          } else {
-               // Looks like ID but name didn't match
-               showAlert("Name Mismatch", "ID text detected, but name didn't match profile. Sending for Manual Verification.");
-               isAiVerified = false;
-          }
 
           const fileName = `${session.user.id}_${Date.now()}.jpg`;
           const { error } = await supabase.storage.from('id_cards').upload(fileName, decode(image.base64), { contentType: 'image/jpeg' });
@@ -317,13 +286,11 @@ function showAlert(title: string, message: string) {
   }
 
   const handleSignOut = async () => {
-    try {
-        const { error } = await supabase.auth.signOut();
-        if (error) showAlert("Error", error.message);
-    } catch (err) {
-        console.error("Sign out error:", err);
-    }
-  };
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    showAlert("Error", error.message);
+  }
+};
 
   async function handleWithdraw() {
       if ((profile?.mana_balance || 0) < 1000) {
@@ -365,8 +332,12 @@ function showAlert(title: string, message: string) {
         <Text style={{ fontSize: 28, fontWeight: 'bold', color: colors.text }}>Profile</Text>
         <TouchableOpacity 
             onPress={() => {
-                showAlert("Sign Out", "Are you sure?");
-            }} 
+  showAlert(
+    "Sign Out",
+    "Are you sure you want to sign out?",
+    handleSignOut
+  );
+}}
             style={{ padding: 10, backgroundColor: 'rgba(255, 71, 87, 0.1)', borderRadius: 12 }}
         >
             <LogOut size={22} color="#ff4757" />
@@ -601,13 +572,12 @@ function showAlert(title: string, message: string) {
       </Text>
 
       <TouchableOpacity
-        onPress={() => setAlertVisible(false)}
-        style={{
-          backgroundColor: colors.primary,
-          padding: 12,
-          borderRadius: 10,
-          alignItems: 'center'
-        }}
+      onPress={() => {
+        setAlertVisible(false);
+        if (confirmActionRef.current) {
+            confirmActionRef.current();
+        }
+    }}
       >
         <Text style={{ color: 'black', fontWeight: 'bold' }}>
           OK
