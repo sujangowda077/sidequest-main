@@ -22,6 +22,7 @@ export default function ProfileScreen({ session, isLockdown }: { session: any, i
 const [alertVisible, setAlertVisible] = useState(false);
 const [alertTitle, setAlertTitle] = useState('');
 const [alertMessage, setAlertMessage] = useState('');
+
 const confirmActionRef = useRef<null | (() => void)>(null);
 
 function showAlert(
@@ -176,7 +177,14 @@ function showAlert(
 
       setUploading(true);
       // Web-safe: Skip OCR, always send for manual verification
+      const isWeb = Platform.OS === 'web';
       let isAiVerified = false;
+      if (!isWeb) {
+   // Only run OCR on mobile
+   // You can re-add your TextRecognition logic here later
+   // For now, we'll just mark all uploads as needing manual review
+   
+}
       
       try {
           
@@ -192,12 +200,7 @@ function showAlert(
               is_verified: isAiVerified 
           }).eq('id', session.user.id);
 
-          if (isAiVerified) {
-              showAlert("Verified! 🤖", `ID verified automatically. Welcome, ${profile.full_name}!`);
-          } else {
-              // Only show if we didn't show the retry alert earlier
-              if (looksLikeId) showAlert("Uploaded 📤", "ID Uploaded for Admin Verification.");
-          }
+          showAlert("Uploaded 📤", "ID Uploaded for Admin Verification.");
 
           fetchProfile();
       } catch (e: any) { 
