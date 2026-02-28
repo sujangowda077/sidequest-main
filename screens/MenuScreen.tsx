@@ -1203,7 +1203,10 @@ const styles = StyleSheet.create({
 
   shopToggleContainer: { flexDirection: 'row', backgroundColor: '#eee', borderRadius: 16, padding: 5, marginTop: 15 },
   shopTab: { flex: 1, flexDirection: 'row', paddingVertical: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
-  shopTabActive: { backgroundColor: '#333', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity:0.2, elevation:3 },
+  shopTabActive: {
+  backgroundColor: '#333',
+  boxShadow: '0px 4px 8px rgba(0,0,0,0.3)',
+},
   shopTabText: { fontWeight: 'bold', marginLeft: 8, color: '#888' },
   searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 50, borderRadius: 14 },
   filterBtn: { width: 50, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#ccc' },

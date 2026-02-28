@@ -52,6 +52,8 @@ export default function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
+  const [userRole, setUserRole] = useState('vendor');
+  
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [updateUrl, setUpdateUrl] = useState('');
 
@@ -79,6 +81,11 @@ export default function App() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session && ADMIN_EMAILS.includes(session.user.email)) {
+  setUserRole('vendor');
+} else {
+  setUserRole('student');
+}
 
       if (session) {
         checkProfile(session.user.id);
@@ -98,6 +105,11 @@ export default function App() {
     const { data: { subscription } } =
       supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
+        if (session && ADMIN_EMAILS.includes(session.user.email)) {
+  setUserRole('vendor');
+} else {
+  setUserRole('student');
+}
 
         if (session) {
           checkProfile(session.user.id);
@@ -123,6 +135,11 @@ export default function App() {
         .from('app_config')
         .select('*')
         .single();
+        if (data?.role === 'vendor') {
+  setUserRole('vendor');
+} else {
+  setUserRole('student');
+}
 
       if (data && data.latest_version !== APP_VERSION) {
         setUpdateUrl(data.update_url);
@@ -230,21 +247,23 @@ export default function App() {
             {() => <HomeScreen userEmail={session.user.email} />}
           </Tab.Screen>
 
-          <Tab.Screen
-  name="Food Run"
-  options={{
-    tabBarIcon: ({ color, size }) => (
-      <Utensils color={color} size={size} />
-    ),
-  }}
->
-            {() => (
-              <ErrandScreen
-                userId={session.user.id}
-                isProfileComplete={isProfileComplete}
-              />
-            )}
-          </Tab.Screen>
+          {userRole !== 'vendor' && (
+  <Tab.Screen
+    name="Food Run"
+    options={{
+      tabBarIcon: ({ color, size }) => (
+        <Utensils color={color} size={size} />
+      ),
+    }}
+  >
+    {() => (
+      <ErrandScreen
+        userId={session.user.id}
+        isProfileComplete={isProfileComplete}
+      />
+    )}
+  </Tab.Screen>
+)}
 
           <Tab.Screen
   name="Menus"
@@ -263,39 +282,41 @@ export default function App() {
             )}
           </Tab.Screen>
 
-          <Tab.Screen
-  name="Print Shop"
-  options={{
-    tabBarIcon: ({ color, size }) => (
-      <Printer color={color} size={size} />
-    ),
-  }}
->
-            {() => (
-              <PrintScreen
-                userId={session.user.id}
-                userEmail={session.user.email}
-                isProfileComplete={isProfileComplete}
-              />
-            )}
-          </Tab.Screen>
-
-          <Tab.Screen
-  name="Tutors"
-  options={{
-    tabBarIcon: ({ color, size }) => (
-      <GraduationCap color={color} size={size} />
-    ),
-  }}
->
-            {() => (
-              <TutorScreen
-                userId={session.user.id}
-                isProfileComplete={isProfileComplete}
-              />
-            )}
-          </Tab.Screen>
-
+          {userRole !== 'vendor' && (
+  <Tab.Screen
+    name="Print Shop"
+    options={{
+      tabBarIcon: ({ color, size }) => (
+        <Printer color={color} size={size} />
+      ),
+    }}
+  >
+    {() => (
+      <PrintScreen
+        userId={session.user.id}
+        userEmail={session.user.email}
+        isProfileComplete={isProfileComplete}
+      />
+    )}
+  </Tab.Screen>
+)}
+          {userRole !== 'vendor' && (
+  <Tab.Screen
+    name="Tutors"
+    options={{
+      tabBarIcon: ({ color, size }) => (
+        <GraduationCap color={color} size={size} />
+      ),
+    }}
+  >
+    {() => (
+      <TutorScreen
+        userId={session.user.id}
+        isProfileComplete={isProfileComplete}
+      />
+    )}
+  </Tab.Screen>
+)}
           <Tab.Screen
   name="Profile"
   options={{
