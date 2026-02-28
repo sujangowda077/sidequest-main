@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-truecaller-sdk/android/build.gradle b/node_modules/react-native-truecaller-sdk/android/build.gradle
+index e34fe97..642b5a1 100644
+--- a/node_modules/react-native-truecaller-sdk/android/build.gradle
++++ b/node_modules/react-native-truecaller-sdk/android/build.gradle
+@@ -40,8 +40,8 @@ android {
+ 
+ 
+ dependencies {
+-    compile 'com.facebook.react:react-native:+'
+-    compile files('libs/truesdk-v0.7-releasePartner.aar')
++    implementation 'com.facebook.react:react-native:+'
++    implementation files('libs/truesdk-v0.7-releasePartner.aar')
+     //compile(name: "truesdk-0.6", ext: "aar")
+ 
+ }

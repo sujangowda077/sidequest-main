@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "655732106298",
+    "project_id": "sidequest-39bdc",
+    "storage_bucket": "sidequest-39bdc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:655732106298:android:623527dc296a8865344103",
+        "android_client_info": {
+          "package_name": "com.yourname.sidequest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBa4uPF2wqGtbECMZ7KsQnmfShY67K2k3A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
