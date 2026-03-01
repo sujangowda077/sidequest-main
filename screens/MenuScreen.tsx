@@ -983,20 +983,80 @@ function showAlert(
   }
 
   renderItem={({ item }) => (
-    <View style={[styles.menuCard, { backgroundColor: colors.card, opacity: item.is_available ? 1 : 0.6 }]}>
-      <View style={{flex:1}}>
-        <Text style={{fontSize: 17, fontWeight:'bold', color: colors.text}}>
-          {item.name}
-        </Text>
-        <Text style={{color:'#888', fontSize:12}}>
-          {item.category}
-        </Text>
-        <Text style={{color: colors.primary, fontWeight:'bold', fontSize: 16}}>
-          ₹{item.price}
+  <View
+    style={[
+      styles.menuCard,
+      {
+        backgroundColor: colors.card,
+        opacity: item.is_available ? 1 : 0.6
+      }
+    ]}
+  >
+    <View style={{ flex: 1 }}>
+      <Text style={{ fontSize: 17, fontWeight: "bold", color: colors.text }}>
+        {item.name}
+      </Text>
+      <Text style={{ color: "#888", fontSize: 12 }}>
+        {item.category}
+      </Text>
+      <Text
+        style={{
+          color: colors.primary,
+          fontWeight: "bold",
+          fontSize: 16
+        }}
+      >
+        ₹{item.price}
+      </Text>
+    </View>
+
+    {item.is_available ? (
+      cart[item.id] ? (
+        <View style={styles.qtyControl}>
+          <JuicyButton onPress={() => updateCart(item.id, -1)} scaleTo={0.8}>
+            <Minus size={18} color="white" />
+          </JuicyButton>
+
+          <Text style={{ marginHorizontal: 10, color: "white" }}>
+            {cart[item.id]}
+          </Text>
+
+          <JuicyButton onPress={() => updateCart(item.id, 1)} scaleTo={0.8}>
+            <Plus size={18} color="white" />
+          </JuicyButton>
+        </View>
+      ) : (
+        <JuicyButton
+          onPress={() => updateCart(item.id, 1)}
+          style={styles.addBtn}
+          scaleTo={0.9}
+        >
+          <Text style={{ color: "black", fontWeight: "bold" }}>
+            ADD
+          </Text>
+        </JuicyButton>
+      )
+    ) : (
+      <View
+        style={{
+          backgroundColor: "#333",
+          padding: 8,
+          borderRadius: 8
+        }}
+      >
+        <Text
+          style={{
+            color: "#888",
+            fontSize: 10,
+            fontWeight: "bold"
+          }}
+        >
+          SOLD OUT
         </Text>
       </View>
-    </View>
-  )}
+    )}
+  </View>
+)}
 />
       {Object.keys(cart).length > 0 && (
           <JuicyButton onPress={() => setShowCheckout(true)} style={styles.floatingBtn} scaleTo={0.95}>
