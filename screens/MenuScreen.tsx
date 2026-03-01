@@ -347,32 +347,56 @@ function showAlert(
   }
 
   async function completeOrder(id: string) {
-      Alert.alert("Complete Order?", "Mark this order as picked up?", [
-          { text: "Cancel", style: 'cancel' },
-          { text: "Yes, I got it", onPress: async () => {
-              const { error } = await supabase.from('errands').update({ status: 'picked_up' }).eq('id', id);
-              if (!error) {
-                  showAlert("Done", "Order completed.");
-                  fetchMyOrders(); 
-              }
-          }}
-      ]);
-  }
+  showAlert(
+    "Confirm Pickup",
+    "Have you received your order?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Complete",
+        onPress: async () => {
+          const { error } = await supabase
+            .from("errands")
+            .update({ status: "delivered" })
+            .eq("id", id);
+
+          if (!error) {
+            showAlert("Success ✅", "Order marked as completed.");
+            fetchMyOrders();
+          } else {
+            showAlert("Error", error.message);
+          }
+        }
+      }
+    ]
+  );
+}
 
   async function resolveCancelledOrder(id: string) {
-      Alert.alert("Issue Resolved?", "Have you visited the store and resolved the payment/order issue? This will remove the order from the list.", [
-          { text: "Not Yet", style: 'cancel' },
-          { text: "Yes, Resolved", onPress: async () => {
-              const { error } = await supabase.from('errands').update({ status: 'resolved' }).eq('id', id);
-              if (!error) {
-                  showAlert("Resolved ✅", "Order has been cleared from the history.");
-                  fetchMyOrders(); 
-              } else {
-                  showAlert("Error", "Could not clear the order.");
-              }
-          }}
-      ]);
-  }
+    showAlert(
+        "Issue Resolved?",
+        "Have you visited the store and resolved the payment/order issue? This will remove the order from the list.",
+        [
+            { text: "Not Yet", style: "cancel" },
+            {
+                text: "Yes, Resolved",
+                onPress: async () => {
+                    const { error } = await supabase
+                        .from('errands')
+                        .update({ status: 'resolved' })
+                        .eq('id', id);
+
+                    if (!error) {
+                        showAlert("Resolved ✅", "Order cleared successfully.");
+                        fetchMyOrders();
+                    } else {
+                        showAlert("Error", error.message);
+                    }
+                }
+            }
+        ]
+    );
+}
 
   async function updateItemDetails() {
       if (!editingItem || !newPrice || !newName) return;

@@ -384,10 +384,8 @@ function showAlert(
             </View>
             <TouchableOpacity
   onPress={handleWithdraw}
-  disabled={(profile?.mana_balance || 0) < 1000}
   style={{
-    backgroundColor:
-      (profile?.mana_balance || 0) < 1000 ? '#ccc' : 'white',
+    backgroundColor:'white',
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 12
