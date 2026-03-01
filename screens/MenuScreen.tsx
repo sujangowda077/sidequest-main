@@ -113,14 +113,17 @@ function showAlert(
   // VENDOR TIMER LOGIC
   const [currentTime, setCurrentTime] = useState(new Date());
   const alertedOrders = useRef(new Set()).current;
+  const handleTabFocus = async () => {
+  setRefreshing(true);
+  await loadAllData();
+  setRefreshing(false);
+};
   
 
   useFocusEffect(
   useCallback(() => {
-    loadAllData();   // always refresh
-
-    return () => {}; // optional cleanup
-  }, [])
+    handleTabFocus();
+  }, [selectedShop])
 );
 
   useEffect(() => {
@@ -931,9 +934,7 @@ function showAlert(
   }
 
   ListHeaderComponent={
-    <View style={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10 }}>
-      {/* PASTE YOUR HEADER CONTENT HERE */}
-      <View style={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10 }}>
+    <View style={{  paddingHorizontal: 20, paddingBottom: 10 }}>
           <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
               <View>
                   <Text style={{fontSize: 28, fontWeight:'bold', color: colors.text}}>Campus Eats 🍔</Text>
@@ -979,7 +980,6 @@ function showAlert(
               ))}
           </ScrollView>
       </View>
-    </View>
   }
 
   renderItem={({ item }) => (
