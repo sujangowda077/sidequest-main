@@ -597,7 +597,7 @@ const [utrError, setUtrError] = useState('');
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <View style={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         
         {/* HEADER WITH STATUS INDICATOR */}
         <View>

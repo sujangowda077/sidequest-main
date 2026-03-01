@@ -662,7 +662,7 @@ function showAlert(
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   card: { padding: 20, borderRadius: 20, marginBottom: 20, flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },

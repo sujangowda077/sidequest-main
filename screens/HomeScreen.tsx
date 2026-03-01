@@ -58,6 +58,15 @@ function showAlert(title: string, message: string) {
   const [qrUrl, setQrUrl] = useState('');
   const [pendingTotal, setPendingTotal] = useState(0);
   const [adUtr, setAdUtr] = useState(''); // 🟢 NEW: UTR State for Ads
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+  setRefreshing(true);
+
+  // 🔥 Call your fetch function here
+  await fetchData();   // replace with your actual fetch function
+
+  setRefreshing(false);
+};
 
   useFocusEffect(
     useCallback(() => {
@@ -289,7 +298,7 @@ function showAlert(title: string, message: string) {
 
       <ScrollView 
         contentContainerStyle={{paddingBottom: 100}}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => {setLoading(true); fetchData(); setLoading(false);}} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
           {/* LIVE ORDER BOARD */}
           <View style={{paddingHorizontal: 20, marginBottom: 25}}>
@@ -392,7 +401,7 @@ function showAlert(title: string, message: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
+  header: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 20, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   manaBadge: { flexDirection:'row', alignItems:'center', backgroundColor: 'rgba(142, 45, 226, 0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(142, 45, 226, 0.5)' },
   manaText: { color: '#E0AAFF', fontWeight: 'bold', marginLeft: 6, fontSize: 16 },
   

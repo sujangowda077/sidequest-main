@@ -212,6 +212,7 @@ export default function App() {
       ) : (
         <Tab.Navigator
         
+        
         id="main-tabs"
   screenOptions={{
     headerShown: false,

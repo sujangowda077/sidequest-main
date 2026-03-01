@@ -113,13 +113,15 @@ function showAlert(
   // VENDOR TIMER LOGIC
   const [currentTime, setCurrentTime] = useState(new Date());
   const alertedOrders = useRef(new Set()).current;
+  
 
   useFocusEffect(
-    useCallback(() => {
-      if (isAdmin && selectedShop !== adminShopName) setSelectedShop(adminShopName);
-      loadAllData();
-    }, [selectedShop, adminView])
-  );
+  useCallback(() => {
+    loadAllData();   // always refresh
+
+    return () => {}; // optional cleanup
+  }, [])
+);
 
   useEffect(() => {
       if (!isAdmin) return;
@@ -575,7 +577,16 @@ function showAlert(
   // --- ADMIN RENDERERS ---
 
   const renderDashboard = () => ( 
-    <ScrollView contentContainerStyle={{padding: 20, paddingTop: 60}} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadAllData} tintColor={colors.primary} />}>
+    <ScrollView
+  contentContainerStyle={{ padding: 20 }}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={loadAllData}
+      tintColor="#00E676"
+    />
+  }
+>
         <Text style={{fontSize: 28, fontWeight:'bold', color: colors.text, marginBottom: 5}}>{selectedShop}</Text>
         <Text style={{fontSize: 14, color: '#888', marginBottom: 20}}>Admin Dashboard</Text>
         <View style={[styles.adminStatusCard, {backgroundColor: shopStatus ? 'rgba(76, 175, 80, 0.1)' : 'rgba(239, 83, 80, 0.1)', borderColor: shopStatus ? '#4caf50' : '#ef5350'}]}>
@@ -904,7 +915,25 @@ function showAlert(
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 10 }}>
+      
+
+      <FlatList
+  style={{ flex: 1 }}
+  data={filteredItems}
+  keyExtractor={item => item.id}
+  contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={loadAllData}
+      tintColor={colors.primary}
+    />
+  }
+
+  ListHeaderComponent={
+    <View style={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10 }}>
+      {/* PASTE YOUR HEADER CONTENT HERE */}
+      <View style={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10 }}>
           <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
               <View>
                   <Text style={{fontSize: 28, fontWeight:'bold', color: colors.text}}>Campus Eats 🍔</Text>
@@ -920,10 +949,14 @@ function showAlert(
           </View>
 
           <View style={styles.shopToggleContainer}>
-              <JuicyButton onPress={() => { setSelectedShop('Five Star'); setCart({}); }} style={[styles.shopTab, selectedShop === 'Five Star' && styles.shopTabActive]} scaleTo={0.95}>
+              <JuicyButton onPress={() => {
+  setSelectedShop('Five Star');
+  setCart({});
+  loadAllData();  // 🔥 ADD THIS
+}} style={[styles.shopTab, selectedShop === 'Five Star' && styles.shopTabActive]} scaleTo={0.95}>
                   <Utensils size={18} color={selectedShop === 'Five Star' ? 'white' : '#888'} /><Text style={[styles.shopTabText, selectedShop === 'Five Star' && {color:'white'}]}>Five Star</Text>
               </JuicyButton>
-              <JuicyButton onPress={() => { setSelectedShop('Ground View Cafe'); setCart({}); }} style={[styles.shopTab, selectedShop === 'Ground View Cafe' && styles.shopTabActive]} scaleTo={0.95}>
+              <JuicyButton onPress={() => { setSelectedShop('Ground View Cafe'); loadAllData(); setCart({}); }} style={[styles.shopTab, selectedShop === 'Ground View Cafe' && styles.shopTabActive]} scaleTo={0.95}>
                   <Coffee size={18} color={selectedShop === 'Ground View Cafe' ? 'white' : '#888'} /><Text style={[styles.shopTabText, selectedShop === 'Ground View Cafe' && {color:'white'}]}>Ground View</Text>
               </JuicyButton>
           </View>
@@ -946,37 +979,25 @@ function showAlert(
               ))}
           </ScrollView>
       </View>
+    </View>
+  }
 
-      <FlatList 
-        data={filteredItems} 
-        keyExtractor={item => item.id} 
-        contentContainerStyle={{ padding: 20, paddingBottom: 150 }} 
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadAllData} tintColor={colors.primary} />} 
-        renderItem={({ item }) => (
-            <View style={[styles.menuCard, { backgroundColor: colors.card, opacity: item.is_available ? 1 : 0.6 }]}>
-                <View style={{flex:1}}>
-                    <Text style={{fontSize: 17, fontWeight:'bold', color: colors.text}}>{item.name}</Text>
-                    <Text style={{color:'#888', fontSize:12}}>{item.category}</Text>
-                    <Text style={{color: colors.primary, fontWeight:'bold', fontSize: 16}}>₹{item.price}</Text>
-                </View>
-                {item.is_available ? (
-                    cart[item.id] ? (
-                        <View style={styles.qtyControl}>
-                            <JuicyButton onPress={() => updateCart(item.id, -1)} scaleTo={0.8}><Minus size={18} color="white"/></JuicyButton>
-                            <Text style={{marginHorizontal: 10, color: 'white'}}>{cart[item.id]}</Text>
-                            <JuicyButton onPress={() => updateCart(item.id, 1)} scaleTo={0.8}><Plus size={18} color="white"/></JuicyButton>
-                        </View>
-                    ) : (
-                        <JuicyButton onPress={() => updateCart(item.id, 1)} style={styles.addBtn} scaleTo={0.9}>
-                            <Text style={{color:'black', fontWeight:'bold'}}>ADD</Text>
-                        </JuicyButton>
-                    )
-                ) : (
-                    <View style={{backgroundColor:'#333', padding:8, borderRadius:8}}><Text style={{color:'#888', fontSize:10, fontWeight:'bold'}}>SOLD OUT</Text></View>
-                )}
-            </View>
-        )} 
-      />
+  renderItem={({ item }) => (
+    <View style={[styles.menuCard, { backgroundColor: colors.card, opacity: item.is_available ? 1 : 0.6 }]}>
+      <View style={{flex:1}}>
+        <Text style={{fontSize: 17, fontWeight:'bold', color: colors.text}}>
+          {item.name}
+        </Text>
+        <Text style={{color:'#888', fontSize:12}}>
+          {item.category}
+        </Text>
+        <Text style={{color: colors.primary, fontWeight:'bold', fontSize: 16}}>
+          ₹{item.price}
+        </Text>
+      </View>
+    </View>
+  )}
+/>
       {Object.keys(cart).length > 0 && (
           <JuicyButton onPress={() => setShowCheckout(true)} style={styles.floatingBtn} scaleTo={0.95}>
               <Text style={{color:'black', fontWeight:'bold', fontSize: 16}}>{Object.values(cart).reduce((a,b)=>a+b,0)} Items</Text>
@@ -1076,7 +1097,7 @@ function showAlert(
 
       <Modal visible={showMyOrders} animationType="slide" presentationStyle="pageSheet">
           <View style={[styles.container, {backgroundColor: colors.background}]}>
-              <View style={{padding: 20, paddingTop: 60, flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
+              <View style={{padding: 20, paddingTop: 20, flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
                   <Text style={{fontSize: 24, fontWeight:'bold', color: colors.text}}>My Orders</Text>
                   <TouchableOpacity onPress={() => setShowMyOrders(false)}><X size={24} color={colors.text}/></TouchableOpacity>
               </View>
@@ -1205,7 +1226,6 @@ const styles = StyleSheet.create({
   shopTab: { flex: 1, flexDirection: 'row', paddingVertical: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
   shopTabActive: {
   backgroundColor: '#333',
-  boxShadow: '0px 4px 8px rgba(0,0,0,0.3)',
 },
   shopTabText: { fontWeight: 'bold', marginLeft: 8, color: '#888' },
   searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 50, borderRadius: 14 },

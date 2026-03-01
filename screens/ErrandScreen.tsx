@@ -351,7 +351,7 @@ setAlertVisible(true);
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   
   tabContainer: { flexDirection: 'row', paddingHorizontal: 20, marginTop: 10 },
   tab: { marginRight: 15, paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, borderWidth: 1, borderColor: '#333' },

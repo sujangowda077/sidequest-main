@@ -242,7 +242,7 @@ export default function TutorScreen({ userId, isProfileComplete }: TutorScreenPr
       <FlatList 
         data={displayData}
         keyExtractor={item => item.id}
-        contentContainerStyle={{paddingBottom: 100, paddingTop: 10}}
+        contentContainerStyle={{paddingBottom: 100, paddingTop: 20}}
         ListEmptyComponent={<Text style={styles.emptyText}>{viewMode === 'market' ? 'No open bounties right now.' : 'No active jobs.'}</Text>}
         renderItem={({ item }) => {
           const { category, title, desc } = parseRequest(item.topic);
@@ -425,7 +425,7 @@ function getCategoryColor(cat: string) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212', paddingTop: 60 },
+  container: { flex: 1, backgroundColor: '#121212', paddingTop: 20 },
   headerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
   headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF' },
   headerSubtitle: { fontSize: 14, color: '#888', marginTop: 5 },
