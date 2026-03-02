@@ -246,6 +246,7 @@ const [utrError, setUtrError] = useState('');
         setUtrError("Please enter last 4 digits of UTR");
         return;
     }
+    setSubmitting(true); 
     setUtrError('');
 
     try {
@@ -256,10 +257,17 @@ const [utrError, setUtrError] = useState('');
             const f = files[i];
             const uniqueName = `${userId}_${Date.now()}_${i}.pdf`;
             
-            const base64File = await FileSystem.readAsStringAsync(f.uri, { encoding: 'base64' });
-            const arrayBuffer = decode(base64File);
+            let arrayBuffer;
 
-            const { error: uploadError } = await supabase.storage.from('documents').upload(uniqueName, arrayBuffer, { contentType: 'application/pdf' });
+if (Platform.OS === 'web') {
+  const response = await fetch(f.uri);
+  arrayBuffer = await response.arrayBuffer();
+} else {
+  const base64File = await FileSystem.readAsStringAsync(f.uri, { encoding: 'base64' });
+  arrayBuffer = decode(base64File);
+}
+
+            const { error: uploadError } = await supabase.storage.from('documents').upload(uniqueName, arrayBuffer, { contentType: 'application/pdf',upsert: true });
             if (uploadError) throw new Error(`Upload Error: ${uploadError.message}`);
 
             const { data } = supabase.storage.from('documents').getPublicUrl(uniqueName);
@@ -313,7 +321,8 @@ const [utrError, setUtrError] = useState('');
         fetchMyOrders(); 
 
     } catch (e: any) { 
-        showAlert("Order Failed ❌", e.message); 
+         console.log("FINALIZE ERROR:", e);
+    showAlert("Order Failed ❌", e?.message || "Unknown error");
     } finally { 
         setSubmitting(false); 
     }
@@ -655,9 +664,38 @@ const [utrError, setUtrError] = useState('');
     {utrError}
   </Text>
 )}
-                <TouchableOpacity onPress={finalizeOrder} disabled={submitting} style={[styles.btn, {backgroundColor: submitting ? '#666' : colors.primary, marginTop: 10}]}>
-                    {submitting ? <ActivityIndicator color="black" /> : <Text style={{color: 'black', fontWeight:'bold'}}>I Have Paid</Text>}
-                </TouchableOpacity>
+                <TouchableOpacity 
+  onPress={finalizeOrder} 
+  disabled={submitting} 
+  style={[
+    styles.btn, 
+    {backgroundColor: submitting ? '#666' : colors.primary, marginTop: 10}
+  ]}
+>
+  {submitting ? (
+    <>
+      <ActivityIndicator color="black" style={{marginRight: 10}} />
+      <Text style={{color: 'black', fontWeight:'bold'}}>
+        Uploading...
+      </Text>
+    </>
+  ) : (
+    <Text style={{color: 'black', fontWeight:'bold'}}>
+      I Have Paid
+    </Text>
+  )}
+</TouchableOpacity>
+
+{submitting && (
+  <Text style={{
+    marginTop: 12,
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 13
+  }}>
+    Uploading your documents. This may take a few seconds. Please wait...
+  </Text>
+)}
             </View>
         </View>
       </Modal>

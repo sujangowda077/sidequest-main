@@ -6,7 +6,9 @@ import {
 import { supabase } from '../lib/supabase';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { useKeepAwake } from 'expo-keep-awake'; 
-import * as Speech from 'expo-speech';            
+import * as Speech from 'expo-speech';  
+import { Animated } from 'react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';          
 import { 
   Search, Minus, Plus, Store, Coffee, Utensils, ClipboardList, CheckCircle, 
   Wallet, ArrowLeft, Edit3, X, Receipt, MapPin, Filter, ArrowUp, ArrowDown, Server, UserCheck, Clock, PlusCircle, Ban, Lock
@@ -26,9 +28,48 @@ interface MenuScreenProps {
 export default function MenuScreen({ userId, userEmail, isProfileComplete }: MenuScreenProps) {
   const { colors } = useTheme();
   // 🔔 Custom Alert State
+  
+const pulseAnim = useRef(new Animated.Value(1)).current;
+const flatListRef = useRef<FlatList>(null);
+const [showConfetti, setShowConfetti] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
 const [alertTitle, setAlertTitle] = useState('');
 const [alertMessage, setAlertMessage] = useState('');
+const DELIVERY_STEPS = [
+  'pending_approval',
+  'open',
+  'cooking',
+  'ready',
+  'picked_up',
+  'delivered'
+];
+
+const TAKEAWAY_STEPS = [
+  'pending_approval',
+  'cooking',
+  'ready',
+  'delivered'
+];
+
+const DINEIN_STEPS = [
+  'pending_approval',
+  'cooking',
+  'ready',
+  'waiting',
+  'delivered'
+];
+
+function getSteps(orderType: string) {
+  if (orderType === 'delivery') return DELIVERY_STEPS;
+  if (orderType === 'dine_in') return DINEIN_STEPS;
+  return TAKEAWAY_STEPS; // default
+}
+
+function getStepIndex(status: string, orderType: string) {
+  const steps = getSteps(orderType);
+  const index = steps.indexOf(status);
+  return index === -1 ? 0 : index;
+}
 const [alertButtons, setAlertButtons] = useState<
   { text: string; onPress?: () => void; style?: "cancel" | "default" }[]
 >([]);
@@ -125,6 +166,37 @@ function showAlert(
     handleTabFocus();
   }, [selectedShop])
 );
+useEffect(() => {
+  Animated.loop(
+    Animated.sequence([
+      Animated.timing(pulseAnim, {
+        toValue: 1.3,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pulseAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ])
+  ).start();
+}, []);
+
+useEffect(() => {
+  if (myOrders.length > 0) {
+    const activeIndex = myOrders.findIndex(o =>
+      o.status !== 'delivered' && o.status !== 'cancelled'
+    );
+
+    if (activeIndex >= 0 && flatListRef.current) {
+      flatListRef.current.scrollToIndex({
+        index: activeIndex,
+        animated: true,
+      });
+    }
+  }
+}, [myOrders]);
 
   useEffect(() => {
       if (!isAdmin) return;
@@ -321,30 +393,43 @@ function showAlert(
   }
 
   async function updateOrderStatus(id: string, status: string) {
-      const order = orders.find(o => o.id === id); 
-      
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-      
-      if (status === 'cooking' || (status === 'open' && order?.order_type === 'delivery')) {
-          if (order) {
-               const earnedMana = Math.floor(Math.random() * 60) + 1;
-               const { data: profile } = await supabase.from('profiles').select('mana_balance').eq('id', order.student_id).single();
-               await supabase.from('profiles').update({ mana_balance: (profile?.mana_balance || 0) + earnedMana }).eq('id', order.student_id);
-          }
-      }
-      
-      await supabase.from('errands').update({ status }).eq('id', id);
+  const order = orders.find(o => o.id === id);
 
-      if (order) {
-          if (status === 'ready') {
-              await notifyUser(order.student_id, "Order Ready! 🍔", `Your token ${order.token_no} is ready for pickup!`);
-          } else if (status === 'cancelled') {
-              await notifyUser(order.student_id, "Order Cancelled ❌", `Your order ${order.token_no} was declined.`);
-          } else if (status === 'cooking') {
-              await notifyUser(order.student_id, "Food is Cooking 🍳", "The vendor has started preparing your order!");
-          }
-      }
+  let finalStatus = status;
+
+  // convert ready → waiting for dine in & takeaway
+  if (status === 'ready' && order?.order_type !== 'delivery') {
+    finalStatus = 'waiting';
   }
+
+  // update local state FIRST correctly
+  setOrders(prev =>
+    prev.map(o =>
+      o.id === id ? { ...o, status: finalStatus } : o
+    )
+  );
+
+  // update database
+  await supabase
+    .from('errands')
+    .update({ status: finalStatus })
+    .eq('id', id);
+
+  // send notifications
+  if (order) {
+    if (finalStatus === 'ready') {
+      await notifyUser(order.student_id, "Order Ready! 🍔", `Your token ${order.token_no} is ready!`);
+    }
+    else if (finalStatus === 'cancelled') {
+      await notifyUser(order.student_id, "Order Cancelled ❌", `Your order ${order.token_no} was declined.`);
+    }
+    else if (finalStatus === 'cooking') {
+      await notifyUser(order.student_id, "Food is Cooking 🍳", "The vendor started preparing your order.");
+    }
+  }
+}
+
+
 
   async function completeOrder(id: string) {
   showAlert(
@@ -362,6 +447,8 @@ function showAlert(
 
           if (!error) {
             showAlert("Success ✅", "Order marked as completed.");
+            setShowConfetti(true);
+setTimeout(() => setShowConfetti(false), 3000);
             fetchMyOrders();
           } else {
             showAlert("Error", error.message);
@@ -575,7 +662,7 @@ function showAlert(
           item_description: desc, 
           shop_name: selectedShop, 
           estimated_cost: total, 
-          order_type: orderType === 'dine_in' ? 'takeaway' : orderType, 
+          order_type: orderType,
           token_no: `#${token}`, 
           status: 'pending_approval', 
           requested_time: requestedTime, 
@@ -1185,7 +1272,15 @@ function showAlert(
                   <Text style={{fontSize: 24, fontWeight:'bold', color: colors.text}}>My Orders</Text>
                   <TouchableOpacity onPress={() => setShowMyOrders(false)}><X size={24} color={colors.text}/></TouchableOpacity>
               </View>
-              <FlatList 
+              {showConfetti && (
+  <ConfettiCannon
+    count={150}
+    origin={{ x: -10, y: 0 }}
+    fadeOut
+  />
+)}
+              <FlatList
+                  ref={flatListRef} 
                   data={myOrders} 
                   keyExtractor={item => item.id} 
                   contentContainerStyle={{padding: 20}} 
@@ -1195,8 +1290,102 @@ function showAlert(
                       <View style={[styles.card, {backgroundColor: colors.card, borderColor: item.status === 'ready' ? '#00E676' : 'transparent', borderWidth: 1}]}>
                           <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 10}}>
                               <Text style={{fontSize: 18, fontWeight:'bold', color: colors.text}}>{item.shop_name}</Text>
-                              <Text style={{color: item.status === 'cancelled' ? '#ff5252' : '#00E676', fontWeight:'bold'}}>{item.status.toUpperCase().replace('_',' ')}</Text>
+                              
                           </View>
+                          {item.status !== 'cancelled' && (
+  <View style={{ marginBottom: 30 }}>
+    {(() => {
+      const steps = getSteps(item.order_type);
+      const currentIndex = getStepIndex(item.status, item.order_type);
+      const progressPercent =
+  currentIndex <= 0
+    ? 5
+    : (currentIndex / (steps.length - 1)) * 100;
+    const labelMap: any = {
+  pending_approval: 'Placed',
+  open: 'Accepted',
+  cooking: 'Cooking',
+  ready: 'Ready',
+  waiting: 'Waiting',
+  picked_up: 'Picked',
+  delivered: 'Done',
+};
+    const stepColors: any = {
+  pending_approval: '#FFD54F',   // Yellow
+  open: '#29B6F6',               // Blue
+  cooking: '#FF7043',            // Orange
+  ready: '#AB47BC',              // Purple
+  waiting: '#FFCA28',            // Amber
+  picked_up: '#42A5F5',          // Light Blue
+  delivered: '#00E676',          // Green
+};
+
+      return (
+        <View>
+
+          {/* Background Line */}
+          <View
+            style={{
+              height: 6,
+              backgroundColor: '#222',
+              position: 'absolute',
+              top: 20,
+              left: 10,
+              right: 10,
+              borderRadius: 3,
+            }}
+          />
+
+          {/* Animated Filled Line */}
+          <View
+  style={{
+    height: 6,
+    position: 'absolute',
+    top: 20,
+    left: 10,
+    borderRadius: 3,
+    width: `${progressPercent}%`,
+    backgroundColor: stepColors[item.status] || '#00E676',
+  }}
+/>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            {steps.map((step, index) => {
+              const isActive = index <= currentIndex;
+              const isCurrent = index === currentIndex;
+
+              return (
+                <View key={step} style={{ alignItems: 'center', flex: 1 }}>
+
+                  <Animated.View
+  style={{
+    height: 16,
+    width: 16,
+    borderRadius: 8,
+    backgroundColor: isActive ? stepColors[step] : '#555',
+    transform: isCurrent ? [{ scale: pulseAnim }] : [{ scale: 1 }],
+    marginBottom: 6
+  }}
+/>
+
+                  <Text
+  style={{
+    fontSize: 11,
+    color: isActive ? stepColors[step] : '#777',
+    fontWeight: isCurrent ? 'bold' : 'normal'
+  }}
+>
+                    {labelMap[step]}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      );
+    })()}
+  </View>
+)}
                           <Text style={{color: '#888', fontSize: 13, marginBottom: 10}}>{new Date(item.created_at).toLocaleString()}</Text>
                           <Text style={{color: colors.text, marginBottom: 10}}>{item.item_description}</Text>
                           <Text style={{color: '#FF9800', fontWeight: 'bold', marginBottom: 10}}>Requested Time: {item.requested_time || 'ASAP'}</Text>
@@ -1225,7 +1414,16 @@ function showAlert(
                               </View>
                           )}
 
-                          {item.status === 'ready' && <TouchableOpacity onPress={() => completeOrder(item.id)} style={{marginTop: 15, backgroundColor: 'black', padding: 12, borderRadius: 10, alignItems: 'center'}}><Text style={{color: 'white', fontWeight: 'bold'}}>Complete Order (Picked Up)</Text></TouchableOpacity>}
+                          {(item.status === 'ready' || item.status === 'waiting') && (
+  <TouchableOpacity
+    onPress={() => completeOrder(item.id)}
+    style={{marginTop: 15, backgroundColor: 'black', padding: 12, borderRadius: 10, alignItems: 'center'}}
+  >
+    <Text style={{color: 'white', fontWeight: 'bold'}}>
+      Complete Order
+    </Text>
+  </TouchableOpacity>
+)}
                       </View>
                   )} 
               />
