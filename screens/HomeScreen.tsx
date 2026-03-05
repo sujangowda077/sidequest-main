@@ -120,10 +120,8 @@ codeReader.decodeFromConstraints(
 
     if (result) {
 
-      // 🛑 STOP CAMERA IMMEDIATELY
-      if (controls) controls.stop();
-
-      setIsScanningBarcode(false);
+      if (controls) controls.stop();     // 🛑 stop camera immediately
+      setIsScanningBarcode(false);      // close scanner UI
 
       handleBarcodeScanned({
         type: "barcode",
@@ -132,11 +130,14 @@ codeReader.decodeFromConstraints(
 
     }
 
+    if (err && err.name !== "NotFoundException") {
+      console.error(err);
+    }
+
   }
 ).then(ctrl => {
   controls = ctrl;
 });
-
 });
 return () => {
 if (controls) {
@@ -278,9 +279,11 @@ controls.stop();
 };
 
   const handleBarcodeScanned = async ({ type, data }: { type: string, data: string }) => {
-      if (isVerifyingAiml) return; 
-      setIsVerifyingAiml(true);
-      const scannedData = data.toUpperCase().trim();
+
+  if (scanLocked) return;
+  setScanLocked(true);
+
+  const scannedData = data.toUpperCase().trim();
 
 const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
 
