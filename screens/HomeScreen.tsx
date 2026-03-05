@@ -59,8 +59,7 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   const [loading, setLoading] = useState(false);
   const [isDecryptingRation, setIsDecryptingRation] = useState(false);
   // 🟢 FOOD VOUCHER UNLOCK TIME (11:00 AM)
-const unlockTime = new 
-Date("2026-03-06T11:00:00);
+const unlockTime = new Date("2026-03-06T11:00:00+05:30");
 
 const now = new Date();
 const isMealUnlocked = now >= unlockTime;
