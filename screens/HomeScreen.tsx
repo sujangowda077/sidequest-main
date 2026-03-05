@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { Html5QrcodeScanner } from "html5-qrcode";
 import { 
   View, Text, TouchableOpacity, StyleSheet, Alert, 
   RefreshControl, Modal, TextInput, ScrollView, Image, Dimensions, Linking, Platform, ImageBackground 
@@ -72,6 +73,28 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
       return () => clearInterval(interval);
     }, [])
   );
+  useEffect(() => {
+
+if (Platform.OS === "web" && isScanningBarcode) {
+
+const scanner = new Html5QrcodeScanner(
+"qr-reader",
+{ fps: 10, qrbox: 250 },
+false
+);
+
+scanner.render(
+(decodedText) => {
+handleBarcodeScanned({ type: "qr", data: decodedText });
+},
+(error) => {
+console.log(error);
+}
+);
+
+}
+
+}, [isScanningBarcode]);
 
   useEffect(() => {
     const channel = supabase
@@ -390,7 +413,9 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
 
               {isScanningBarcode ? (
                   <View style={styles.scannerContainer}>
-                      <CameraView style={StyleSheet.absoluteFillObject} facing="back" onBarcodeScanned={isVerifyingAiml ? undefined : handleBarcodeScanned} barcodeScannerSettings={{ barcodeTypes: ["code128", "code39", "ean13", "qr", "pdf417"] }} />
+                      <View style={{ width: "100%", height: 300 }}>
+  <div id="qr-reader" style={{ width: "100%" }} />
+</View>
                       <View style={styles.scannerTarget} />
                       <TouchableOpacity onPress={() => setIsScanningBarcode(false)} style={styles.cancelScanBtn}><Text style={styles.cancelScanText}>CANCEL SCAN</Text></TouchableOpacity>
                   </View>
