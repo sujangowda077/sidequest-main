@@ -285,6 +285,30 @@ controls.stop();
 const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
 
 console.log("AIML_NODE_UPLINK_99", scannedData);
+// DOOR QR DETECTION
+if (scannedData.includes("AURORA") || scannedData.includes("ENTRY")) {
+
+  if (!profile.is_aiml_verified) {
+    showAlert("Access Denied", "Please generate your pass first.");
+    return;
+  }
+
+  await supabase
+    .from("aurora_tickets")
+    .update({ has_entered: true })
+    .eq("profile_id", profile.id);
+
+  setProfile((prev:any)=>({
+    ...prev,
+    has_entered: true
+  }));
+
+  setIsScanningBarcode(false);
+
+  showAlert("ENTRY GRANTED", "Welcome to Aurora V 🎉");
+
+  return;
+}
 
       try {
           if (profile.is_aiml_verified) {
