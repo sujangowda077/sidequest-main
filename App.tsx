@@ -44,7 +44,7 @@ import TutorScreen from './screens/TutorScreen';
 
 // -------- Config --------
 const ADMIN_EMAILS = ['9066282034@campus.app', '9686050312@campus.app'];
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.3";
 
 const Tab = createBottomTabNavigator();
 

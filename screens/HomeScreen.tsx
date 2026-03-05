@@ -1,16 +1,23 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
   View, Text, TouchableOpacity, StyleSheet, Alert, 
-  RefreshControl, Modal, TextInput, ScrollView, Image, Dimensions, Linking 
+  RefreshControl, Modal, TextInput, ScrollView, Image, Dimensions, Linking, Platform, ImageBackground 
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { 
-  X, Zap, Store, Coffee, Lock, Trash2, CheckCircle, Bug 
+  X, Zap, Store, Coffee, Lock, Trash2, CheckCircle, Bug, ScanBarcode, Ticket 
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+// 🟢 THE CUSTOM AURORA V EVENT BACKGROUNDS
+const BANNER_BG_URI = 'https://qcbjxivexhpxdxdvoekp.supabase.co/storage/v1/object/public/images/Screenshot%202026-03-05%20015450.png';
+const ENTRY_TICKET_BG_URI = 'https://qcbjxivexhpxdxdvoekp.supabase.co/storage/v1/object/public/images/Screenshot%202026-03-05%20015713.png';
+const FOOD_TICKET_BG_URI = 'https://qcbjxivexhpxdxdvoekp.supabase.co/storage/v1/object/public/images/image_2026-03-05_020007011.png';
 
 // --- THEME FOR ADS ---
 const VIBES: any = {
@@ -21,15 +28,6 @@ const VIBES: any = {
 
 export default function HomeScreen({ userEmail }: { userEmail: string }) {
   const { colors } = useTheme();
-  const [alertVisible, setAlertVisible] = useState(false);
-const [alertTitle, setAlertTitle] = useState('');
-const [alertMessage, setAlertMessage] = useState('');
-
-function showAlert(title: string, message: string) {
-  setAlertTitle(title);
-  setAlertMessage(message);
-  setAlertVisible(true);
-}
 
   // --- CONFIG ---
   const MY_UPI = "minecraftsreyash@oksbi"; 
@@ -43,7 +41,7 @@ function showAlert(title: string, message: string) {
   const isAdmin = !!myShop;
 
   // --- STATE ---
-  const [profile, setProfile] = useState<any>({ id: null, full_name: 'Student', mana_balance: 0 });
+  const [profile, setProfile] = useState<any>({ id: null, full_name: 'Student', mana_balance: 0, is_aiml_verified: false, has_entered: false, food_claimed: false });
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
   const [promos, setPromos] = useState<any[]>([]);
   const [shopStates, setShopStates] = useState<{[key: string]: boolean}>({}); 
@@ -57,55 +55,59 @@ function showAlert(title: string, message: string) {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [pendingTotal, setPendingTotal] = useState(0);
-  const [adUtr, setAdUtr] = useState(''); // 🟢 NEW: UTR State for Ads
-  const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = async () => {
-  setRefreshing(true);
+  const [adUtr, setAdUtr] = useState(''); 
 
-  // 🔥 Call your fetch function here
-  await fetchData();   // replace with your actual fetch function
-
-  setRefreshing(false);
-};
+  // 🟢 AURORA V EVENT STATE
+  const [showAimlModal, setShowAimlModal] = useState(false);
+  const [aimlName, setAimlName] = useState('');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScanningBarcode, setIsScanningBarcode] = useState(false);
+  const [isVerifyingAiml, setIsVerifyingAiml] = useState(false);
+  const [isDecryptingRation, setIsDecryptingRation] = useState(false); 
 
   useFocusEffect(
     useCallback(() => {
       fetchData();
-      
-      // 🟢 AUTO-CLEANUP TIMER: Re-runs every minute to automatically hide 5-min old finished orders
-      const interval = setInterval(() => {
-          fetchData();
-      }, 60000); 
-
+      const interval = setInterval(() => { fetchData(); }, 60000); 
       return () => clearInterval(interval);
     }, [])
   );
 
-  // 🟢 REALTIME LISTENER: AUTO-UPDATE BOARD
   useEffect(() => {
     const channel = supabase
       .channel('public:errands')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'errands' },
-        (payload) => {
-          fetchData(); 
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'errands' }, (payload) => { fetchData(); })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
   async function fetchData() {
+    // 🟢 1. GET BASE PROFILE
     const { data: userData } = await supabase
         .from('profiles')
         .select('id, full_name, mana_balance')
         .eq('email', safeEmail)
         .single();
-    if (userData) setProfile(userData);
+        
+    if (!userData) return;
 
-    // 🟢 FETCH LOGIC: Get Cooking, Ready, AND recently Finished orders
+    // 🟢 2. GET EVENT TICKET DATA (NEW TABLE)
+    const { data: ticketData } = await supabase
+        .from('aurora_tickets')
+        .select('*')
+        .eq('profile_id', userData.id)
+        .single();
+
+    // 🟢 3. MERGE STATE
+    setProfile({
+        id: userData.id,
+        mana_balance: userData.mana_balance,
+        full_name: ticketData ? ticketData.full_name : userData.full_name,
+        is_aiml_verified: !!ticketData, // If row exists, they are verified
+        has_entered: ticketData ? ticketData.has_entered : false,
+        food_claimed: ticketData ? ticketData.food_claimed : false
+    });
+
     const { data: orders } = await supabase
         .from('errands')
         .select('token_no, status, shop_name, student_id, updated_at')
@@ -116,19 +118,12 @@ function showAlert(title: string, message: string) {
         const now = Date.now();
         const validLiveOrders = orders.filter(o => {
             if (o.status === 'cooking' || o.status === 'ready') return true;
-            
-            // 🟢 If finished (picked_up/delivered), keep it on board for exactly 5 minutes
-            const updatedTime = new Date(o.updated_at).getTime();
-            return (now - updatedTime) <= (5 * 60 * 1000); 
+            return (now - new Date(o.updated_at).getTime()) <= (5 * 60 * 1000); 
         });
         setLiveOrders(validLiveOrders);
     }
 
-    const { data: ads } = await supabase
-        .from('promotions')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+    const { data: ads } = await supabase.from('promotions').select('*').eq('is_active', true).order('created_at', { ascending: false });
     if (ads) setPromos(ads);
 
     const { data: shops } = await supabase.from('shops').select('name, is_open');
@@ -142,30 +137,28 @@ function showAlert(title: string, message: string) {
   // --- ACTIONS ---
 
   async function handlePostAd() {
-    if (!adTitle || !adDesc) { showAlert("Missing Info", "Please add details."); return; }
-    const randomPaisa = Math.floor(Math.random() * 90) + 10;
-    const uniqueAmount = (AD_PRICE + (randomPaisa / 100)).toFixed(2);
-    const upiLink = `upi://pay?pa=${MY_UPI}&pn=CampusConnectAd&am=${uniqueAmount}&cu=INR`;
-    const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&bgcolor=ffffff&data=${encodeURIComponent(upiLink)}`;
-    setQrUrl(qrImage);
-    setPendingTotal(parseFloat(uniqueAmount));
-    setAdUtr('');
-    setShowQRModal(true);
+      if (!adTitle || !adDesc) { Alert.alert("Missing Info", "Please add details."); return; }
+      const randomPaisa = Math.floor(Math.random() * 90) + 10;
+      const uniqueAmount = (AD_PRICE + (randomPaisa / 100)).toFixed(2);
+      const upiLink = `upi://pay?pa=${MY_UPI}&pn=CampusConnectAd&am=${uniqueAmount}&cu=INR`;
+      const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&bgcolor=ffffff&data=${encodeURIComponent(upiLink)}`;
+      setQrUrl(qrImage);
+      setPendingTotal(parseFloat(uniqueAmount));
+      setAdUtr('');
+      setShowQRModal(true);
   }
 
   async function finalizeAdPost() {
-      // 🟢 UTR GATEKEEPER
       if (!adUtr || adUtr.length < 4) {
-          showAlert("Invalid UTR", "Please enter the last 4 digits of your payment reference.");
+          Alert.alert("Invalid UTR", "Please enter the last 4 digits of your payment reference.");
           return;
       }
-
       setShowQRModal(false);
       const { error } = await supabase.from('promotions').insert({ 
           shop_name: myShop, title: adTitle, description: adDesc, bg_color: selectedVibe, is_active: true
       });
       if (!error) { 
-          showAlert("Success", "Ad posted!"); 
+          Alert.alert("Success", "Ad posted!"); 
           setShowModal(false); 
           setAdTitle(''); 
           setAdDesc(''); 
@@ -175,19 +168,115 @@ function showAlert(title: string, message: string) {
   }
 
   const handleDeleteAd = (id: string) => {
-    Alert.alert("Remove?", "Delete this ad?", [
-        { text: "Cancel" },
-        { text: "Delete", style: "destructive", onPress: async () => {
-            await supabase.from('promotions').delete().eq('id', id);
-            fetchData();
-        }}
-    ]);
+      Alert.alert("Remove?", "Delete this ad?", [
+          { text: "Cancel" },
+          { text: "Delete", style: "destructive", onPress: async () => {
+              await supabase.from('promotions').delete().eq('id', id);
+              fetchData();
+          }}
+      ]);
   };
 
   const handleReportBug = () => {
       const subject = "SideQuest Bug Report";
-      const body = "Please describe the issue you are facing:";
-      Linking.openURL(`mailto:office.sidequest26@gmail.com?subject=${subject}&body=${body}`);
+      const body = "Please describe the issue you are facing:\n\n";
+      Linking.openURL(`mailto:office.sidequest@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
+
+  // 🟢 EVENT ACTIONS
+  const handleProceedToScanner = async () => {
+      if (!aimlName.trim()) { Alert.alert("Error", "Enter your name to proceed."); return; }
+      if (!permission?.granted) {
+          const { granted } = await requestPermission();
+          if (!granted) { Alert.alert("Camera Disabled", "Camera access is required."); return; }
+      }
+      setIsScanningBarcode(true);
+  };
+
+  const handleBarcodeScanned = async ({ type, data }: { type: string, data: string }) => {
+      if (isVerifyingAiml) return; 
+      setIsVerifyingAiml(true);
+      
+      const scannedData = data.toUpperCase().trim();
+
+      try {
+          if (profile.is_aiml_verified) {
+              // 🚪 DOOR NODE SCANNING LOGIC (UPDATED TABLE)
+              if (scannedData.includes("AIML_NODE_UPLINK_99")) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  await supabase.from('aurora_tickets').update({ has_entered: true }).eq('profile_id', profile.id);
+                  setProfile((prev: any) => ({ ...prev, has_entered: true }));
+                  setIsScanningBarcode(false);
+                  Alert.alert("ENTRY SECURED", "Welcome to the Fresher's Party.");
+              } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  setIsScanningBarcode(false);
+                  Alert.alert("INVALID DOOR NODE", "This is not the correct entry QR code.");
+              }
+          } else {
+              // 🆔 ID CARD BARCODE LOGIC 
+              if (scannedData.includes("CI")) {
+                  
+                  // 🟢 THE ANTI-CHEAT DATABASE LOCK (INSERT NEW ROW)
+                  const { error } = await supabase.from('aurora_tickets').insert({ 
+                      profile_id: profile.id,
+                      usn: scannedData,
+                      full_name: aimlName,
+                      has_entered: false, 
+                      food_claimed: false 
+                  });
+
+                  if (error) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                      setIsScanningBarcode(false);
+                      // 23505 is the Postgres code for Unique Constraint Violation!
+                      if (error.code === '23505') {
+                          Alert.alert("SECURITY ALERT 🚨", "This ID Card has already been claimed by another device!");
+                      } else {
+                          Alert.alert("Database Error", "Network failed. Try again.");
+                      }
+                      setIsVerifyingAiml(false);
+                      return;
+                  }
+
+                  // If insert succeeds:
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setProfile((prev: any) => ({ 
+                      ...prev, 
+                      is_aiml_verified: true, 
+                      full_name: aimlName,
+                      has_entered: false,
+                      food_claimed: false 
+                  }));
+                  
+                  setIsScanningBarcode(false);
+                  Alert.alert("ACCESS GRANTED", `Verified USN: ${scannedData}\n\nPass Generated Successfully.`);
+              } else {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  setIsScanningBarcode(false); 
+                  Alert.alert("ACCESS DENIED", "Non-AIML entity detected.");
+              }
+          }
+      } catch (e: any) { Alert.alert("Error", "Network failed. Try again."); }
+      setIsVerifyingAiml(false);
+  };
+
+  const handleClaimFood = async () => {
+      Alert.alert("REDEEM MEAL VOUCHER?", "Do not activate this until you are at the food counter. This action burns your ticket.", [
+          { text: "CANCEL", style: "cancel" },
+          { text: "REDEEM", style: "destructive", onPress: async () => {
+              setIsDecryptingRation(true);
+              for(let i=0; i<3; i++) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); await new Promise(r => setTimeout(r, 400)); }
+              try {
+                  // 🟢 BURN TICKET IN NEW TABLE
+                  const { error } = await supabase.from('aurora_tickets').update({ food_claimed: true }).eq('profile_id', profile.id);
+                  if (error) throw error;
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setProfile((prev: any) => ({ ...prev, food_claimed: true }));
+              } catch (e: any) { Alert.alert("Error", "Network failed."); }
+              setIsDecryptingRation(false);
+          }}
+      ]);
   };
 
   // --- COMPONENTS ---
@@ -195,62 +284,30 @@ function showAlert(title: string, message: string) {
   const OrderColumn = ({ title, color, orders }: { title: string, color: string, orders: any[] }) => (
       <View style={{flex: 1, paddingHorizontal: 5}}>
           <Text style={{color: color, fontWeight:'bold', fontSize: 12, marginBottom: 8, textAlign:'center', letterSpacing:1}}>{title}</Text>
-          {orders.length === 0 ? (
-              <Text style={{color:'#333', textAlign:'center', fontSize: 10}}>-</Text>
-          ) : (
-              orders.map((o, i) => {
-                  const isMine = o.student_id === profile.id;
-                  return (
-                    <View key={i} style={isMine ? styles.myTokenBadge : null}>
-                        <Text style={{
-                            color: isMine ? 'black' : 'white', 
-                            fontSize: 22, 
-                            fontWeight:'bold', 
-                            textAlign:'center', 
-                            marginBottom: 4
-                        }}>
-                            {o.token_no.replace('#', '')}
-                        </Text>
-                        {isMine && <Text style={{color:'black', fontSize:8, textAlign:'center', fontWeight:'bold'}}>YOU</Text>}
-                    </View>
-                    
-                  )
-              })
-          )}
+          {orders.length === 0 ? <Text style={{color:'#333', textAlign:'center', fontSize: 10}}>-</Text> : orders.map((o, i) => {
+              const isMine = o.student_id === profile.id;
+              return (
+                  <View key={i} style={isMine ? styles.myTokenBadge : null}>
+                      <Text style={{color: isMine ? 'black' : 'white', fontSize: 22, fontWeight:'bold', textAlign:'center', marginBottom: 4}}>{o.token_no.replace('#', '')}</Text>
+                      {isMine && <Text style={{color:'black', fontSize:8, textAlign:'center', fontWeight:'bold'}}>YOU</Text>}
+                  </View>
+              )
+          })}
       </View>
   );
 
   const ShopMonitor = ({ name, dbName, icon }: { name: string, dbName: string, icon: any }) => {
       const isOpen = shopStates[dbName] !== false;
-      
-      // 🟢 DATA ROUTING FOR MONITORS
       const shopOrders = liveOrders.filter(o => o.shop_name === dbName);
       const cooking = shopOrders.filter(o => o.status === 'cooking');
-      // Ready column shows 'ready' + recently finished orders
       const ready = shopOrders.filter(o => ['ready', 'picked_up', 'delivered'].includes(o.status));
-
       return (
           <View style={[styles.monitorContainer, !isOpen && {borderColor: '#d32f2f', borderWidth: 2}]}>
               <View style={[styles.monitorHeader, !isOpen && {backgroundColor: '#ffcdd2'}]}>
-                  <View style={{flexDirection:'row', alignItems:'center'}}>
-                      {icon}
-                      <Text style={{color:'black', fontWeight:'bold', marginLeft: 8, fontSize: 18}}>{name.toUpperCase()}</Text>
-                  </View>
+                  <View style={{flexDirection:'row', alignItems:'center'}}>{icon}<Text style={{color:'black', fontWeight:'bold', marginLeft: 8, fontSize: 18}}>{name.toUpperCase()}</Text></View>
                   {!isOpen && <Text style={{color:'#d32f2f', fontWeight:'bold', fontSize: 12, borderWidth:1, borderColor:'#d32f2f', paddingHorizontal:6, borderRadius:4}}>CLOSED</Text>}
               </View>
-              
-              {!isOpen ? (
-                  <View style={{flex: 1, justifyContent:'center', alignItems:'center', minHeight: 100, backgroundColor: '#1a1a1a'}}>
-                      <Lock size={32} color="#ef5350" />
-                      <Text style={{color:'#ef5350', fontWeight:'bold', fontSize: 16, marginTop: 10, letterSpacing: 2}}>CLOSED</Text>
-                  </View>
-              ) : (
-                  <View style={{flexDirection:'row', paddingTop: 15, paddingBottom: 15}}>
-                      <OrderColumn title="PREPARING" color="#FF9800" orders={cooking} />
-                      <View style={{width: 1, backgroundColor:'#333'}} />
-                      <OrderColumn title="READY" color="#00E676" orders={ready} />
-                  </View>
-              )}
+              {!isOpen ? <View style={{flex: 1, justifyContent:'center', alignItems:'center', minHeight: 100, backgroundColor: '#1a1a1a'}}><Lock size={32} color="#ef5350" /><Text style={{color:'#ef5350', fontWeight:'bold', fontSize: 16, marginTop: 10, letterSpacing: 2}}>CLOSED</Text></View> : <View style={{flexDirection:'row', paddingTop: 15, paddingBottom: 15}}><OrderColumn title="PREPARING" color="#FF9800" orders={cooking} /><View style={{width: 1, backgroundColor:'#333'}} /><OrderColumn title="READY" color="#00E676" orders={ready} /></View>}
           </View>
       );
   };
@@ -258,20 +315,10 @@ function showAlert(title: string, message: string) {
   const PromoCard = ({ item }: { item: any }) => {
     const theme = VIBES[item.bg_color] || VIBES['spicy'];
     const isOwner = myShop === item.shop_name; 
-
     return (
       <View style={styles.cardContainer}>
           <LinearGradient colors={theme.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
-             <View style={styles.cardHeader}>
-                <View style={styles.shopBadge}>
-                    <Text style={[styles.shopText, {color: theme.textColor}]}>{item.shop_name}</Text>
-                </View>
-                {isOwner && (
-                    <TouchableOpacity onPress={() => handleDeleteAd(item.id)} style={styles.deleteBtn}>
-                        <Trash2 size={18} color={theme.textColor} />
-                    </TouchableOpacity>
-                )}
-             </View>
+             <View style={styles.cardHeader}><View style={styles.shopBadge}><Text style={[styles.shopText, {color: theme.textColor}]}>{item.shop_name}</Text></View>{isOwner && (<TouchableOpacity onPress={() => handleDeleteAd(item.id)} style={styles.deleteBtn}><Trash2 size={18} color={theme.textColor} /></TouchableOpacity>)}</View>
              <Text style={[styles.cardTitle, {color: theme.textColor}]} numberOfLines={2}>{item.title}</Text>
              <Text style={[styles.cardDesc, {color: theme.textColor}]} numberOfLines={2}>{item.description}</Text>
           </LinearGradient>
@@ -281,57 +328,47 @@ function showAlert(title: string, message: string) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      
-      {/* HEADER */}
       <View style={styles.header}>
           <View>
               <Text style={{color: '#888', fontSize: 14}}>Welcome back,</Text>
-              <Text style={{fontSize: 24, fontWeight: 'bold', color: colors.text}}>
-                  {profile.full_name ? profile.full_name.split(' ')[0] : 'User'}
-              </Text>
+              <Text style={{fontSize: 24, fontWeight: 'bold', color: colors.text}}>{profile.full_name ? profile.full_name.split(' ')[0] : 'User'}</Text>
           </View>
-          <View style={styles.manaBadge}>
-              <Zap size={16} color="#FFD700" fill="#FFD700" />
-              <Text style={styles.manaText}>{profile.mana_balance || 0}</Text>
-          </View>
+          <View style={styles.manaBadge}><Zap size={16} color="#FFD700" fill="#FFD700" /><Text style={styles.manaText}>{profile.mana_balance || 0}</Text></View>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={{paddingBottom: 100}}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-          {/* LIVE ORDER BOARD */}
+      <ScrollView contentContainerStyle={{paddingBottom: 100}} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => {setLoading(true); fetchData(); setLoading(false);}} tintColor={colors.primary} />}>
+          
           <View style={{paddingHorizontal: 20, marginBottom: 25}}>
               <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:15}}>
                   <Text style={{color:'#888', fontWeight:'bold', fontSize: 12, letterSpacing: 1}}>LIVE ORDER BOARD</Text>
-                  <View style={{flexDirection:'row', gap:10}}>
-                      <View style={{flexDirection:'row', alignItems:'center'}}><View style={{width:8, height:8, borderRadius:4, backgroundColor:'#FF9800', marginRight:4}}/><Text style={{color:'#666', fontSize:10}}>Cooking</Text></View>
-                      <View style={{flexDirection:'row', alignItems:'center'}}><View style={{width:8, height:8, borderRadius:4, backgroundColor:'#00E676', marginRight:4}}/><Text style={{color:'#666', fontSize:10}}>Ready</Text></View>
-                  </View>
+                  <View style={{flexDirection:'row', gap:10}}><View style={{flexDirection:'row', alignItems:'center'}}><View style={{width:8, height:8, borderRadius:4, backgroundColor:'#FF9800', marginRight:4}}/><Text style={{color:'#666', fontSize:10}}>Cooking</Text></View><View style={{flexDirection:'row', alignItems:'center'}}><View style={{width:8, height:8, borderRadius:4, backgroundColor:'#00E676', marginRight:4}}/><Text style={{color:'#666', fontSize:10}}>Ready</Text></View></View>
               </View>
-              
               <View style={{flexDirection:'column', gap: 20}}>
                   <ShopMonitor name="Five Star" dbName="Five Star" icon={<Store size={20} color="black"/>} />
                   <ShopMonitor name="Ground View" dbName="Ground View Cafe" icon={<Coffee size={20} color="black"/>} />
               </View>
           </View>
 
-          {/* CAMPUS BUZZ */}
           <View style={{paddingHorizontal: 20}}>
               <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
                   <Text style={{color: colors.text, fontWeight:'bold', fontSize: 18}}>Campus Buzz ⚡</Text>
-                  {isAdmin && (
-                      <TouchableOpacity onPress={() => setShowModal(true)}>
-                          <Text style={{color: colors.primary, fontWeight:'bold'}}>+ Post Ad</Text>
-                      </TouchableOpacity>
-                  )}
+                  {isAdmin && (<TouchableOpacity onPress={() => setShowModal(true)}><Text style={{color: colors.primary, fontWeight:'bold'}}>+ Post Ad</Text></TouchableOpacity>)}
               </View>
 
-              {promos.length === 0 ? (
-                  <Text style={{color:'#666', fontStyle:'italic'}}>Quiet day on campus...</Text>
-              ) : (
-                  promos.map(item => <PromoCard key={item.id} item={item} />)
-              )}
+              {/* 🟢 REDESIGNED AURORA BANNER */}
+              <TouchableOpacity onPress={() => setShowAimlModal(true)} style={styles.eventBannerBtn} activeOpacity={0.8}>
+                  <ImageBackground source={{ uri: BANNER_BG_URI }} style={styles.eventBannerBg} imageStyle={{ borderRadius: 16 }}>
+                      <View style={styles.eventBannerOverlay}>
+                          <Ticket size={32} color="#FFF" />
+                          <View style={{marginLeft: 15, flex: 1}}>
+                              <Text style={styles.eventBannerTitle}>AURORA V : FRESHER'S EVENT</Text>
+                              <Text style={styles.eventBannerSub}>Tap to access your event passes</Text>
+                          </View>
+                      </View>
+                  </ImageBackground>
+              </TouchableOpacity>
+
+              {promos.length === 0 ? <Text style={{color:'#666', fontStyle:'italic', marginTop: 15}}>Quiet day on campus...</Text> : <View style={{marginTop: 15}}>{promos.map(item => <PromoCard key={item.id} item={item} />)}</View>}
           </View>
 
           {/* BUG REPORT */}
@@ -341,8 +378,130 @@ function showAlert(title: string, message: string) {
                   <Text style={{color: '#666', fontSize: 12, fontWeight: 'bold'}}>Report a Bug</Text>
               </TouchableOpacity>
           </View>
-
       </ScrollView>
+
+      {/* 🟢 REDESIGNED EVENT TICKET MODAL */}
+      <Modal visible={showAimlModal} transparent animationType="slide" onRequestClose={() => {setShowAimlModal(false); setIsScanningBarcode(false);}}>
+          <View style={styles.modalBackdrop}>
+              <View style={styles.modalHeaderRow}>
+                  <Text style={styles.modalHeaderTitle}>EVENT PORTAL</Text>
+                  <TouchableOpacity onPress={() => {setShowAimlModal(false); setIsScanningBarcode(false);}}><X size={28} color="#FFF" /></TouchableOpacity>
+              </View>
+
+              {isScanningBarcode ? (
+                  <View style={styles.scannerContainer}>
+                      <CameraView style={StyleSheet.absoluteFillObject} facing="back" onBarcodeScanned={isVerifyingAiml ? undefined : handleBarcodeScanned} barcodeScannerSettings={{ barcodeTypes: ["code128", "code39", "ean13", "qr", "pdf417"] }} />
+                      <View style={styles.scannerTarget} />
+                      <TouchableOpacity onPress={() => setIsScanningBarcode(false)} style={styles.cancelScanBtn}><Text style={styles.cancelScanText}>CANCEL SCAN</Text></TouchableOpacity>
+                  </View>
+              ) : (profile.has_entered && profile.is_aiml_verified) ? (
+                  /* 🟢 PHASE 3 & 4: HORIZONTAL MEAL VOUCHER TICKET */
+                  <View style={styles.ticketWrapper}>
+                      <ImageBackground source={{ uri: FOOD_TICKET_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
+                          <View style={[styles.ticketTint, { backgroundColor: profile.food_claimed ? 'rgba(0,0,0,0.85)' : 'rgba(150, 100, 0, 0.4)' }]} />
+                          
+                          {/* Stub Left */}
+                          <View style={styles.ticketStub}>
+                              <Text style={[styles.stubText, {color: profile.food_claimed ? '#555' : '#FFD700'}]}>
+                                  {profile.food_claimed ? 'VOID - VOID' : 'VALID - VALID'}
+                              </Text>
+                          </View>
+
+                          {/* Dashed Line & Punches */}
+                          <View style={styles.ticketDivider}>
+                              <View style={styles.punchHoleTop} />
+                              <View style={styles.punchHoleBottom} />
+                          </View>
+
+                          {/* Body Right */}
+                          <View style={styles.ticketBody}>
+                              <Text style={styles.ticketCollegeText}>AURORA V</Text>
+                              <Text style={[styles.ticketMainTitle, { color: profile.food_claimed ? '#666' : '#FFF', fontSize: 24 }]}>MEAL VOUCHER</Text>
+                              <Text style={styles.ticketSubTitle}>1 NUTRITIONAL UNIT</Text>
+                              
+                              <View style={{ marginTop: 'auto' }}>
+                                  <Text style={styles.ticketLabel}>ISSUED TO</Text>
+                                  <Text style={[styles.ticketValue, {color: profile.food_claimed ? '#666' : '#FFF'}]}>{profile.full_name}</Text>
+                              </View>
+
+                              {profile.food_claimed && (
+                                  <View style={styles.redeemedStamp}><Text style={styles.redeemedStampText}>REDEEMED</Text></View>
+                              )}
+                          </View>
+                      </ImageBackground>
+
+                      {!profile.food_claimed ? (
+                          <TouchableOpacity onPress={handleClaimFood} disabled={isDecryptingRation} style={styles.goldActionBtn}>
+                              <Text style={styles.goldActionText}>{isDecryptingRation ? "PROCESSING..." : "REDEEM AT FOOD COUNTER"}</Text>
+                          </TouchableOpacity>
+                      ) : (
+                          <Text style={styles.bottomWarningRed}>This voucher has been consumed.</Text>
+                      )}
+                  </View>
+
+              ) : profile.is_aiml_verified ? (
+                  /* 🟢 PHASE 2: HORIZONTAL ENTRY TICKET */
+                  <View style={styles.ticketWrapper}>
+                      <ImageBackground source={{ uri: ENTRY_TICKET_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
+                          <View style={styles.ticketTint} />
+                          
+                          {/* Stub Left */}
+                          <View style={styles.ticketStub}>
+                              <Text style={styles.stubText}>NCET CSE(AI&ML)</Text>
+                          </View>
+
+                          {/* Dashed Line & Punches */}
+                          <View style={styles.ticketDivider}>
+                              <View style={styles.punchHoleTop} />
+                              <View style={styles.punchHoleBottom} />
+                          </View>
+
+                          {/* Body Right */}
+                          <View style={styles.ticketBody}>
+                              <Text style={styles.ticketCollegeText}>Department of CSE(AI&ML) Presents</Text>
+                              <Text style={styles.ticketMainTitle}>AURORA V</Text>
+                              <Text style={styles.ticketSubTitle}>6th MARCH 2026</Text>
+                              
+                              <View style={styles.ticketDataRow}>
+                                  <View>
+                                      <Text style={styles.ticketLabel}>GUEST</Text>
+                                      <Text style={styles.ticketValue}>{profile.full_name}</Text>
+                                  </View>
+                                  <View style={styles.statusBadge}>
+                                      <Text style={styles.statusBadgeText}>PENDING CHECK-IN</Text>
+                                  </View>
+                              </View>
+                          </View>
+                      </ImageBackground>
+
+                      <TouchableOpacity onPress={() => setIsScanningBarcode(true)} style={styles.primaryActionBtn}>
+                          <ScanBarcode size={20} color="black" style={{marginRight: 10}} />
+                          <Text style={styles.primaryActionText}>SCAN DOOR QR TO ENTER</Text>
+                      </TouchableOpacity>
+                  </View>
+
+              ) : (
+                  /* 🟢 PHASE 1: REGISTRATION CARD */
+                  <View style={styles.registrationCard}>
+                      <ImageBackground source={{ uri: BANNER_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
+                          <View style={[styles.ticketTint, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
+                          <View style={{ padding: 25, flex: 1, justifyContent: 'center' }}>
+                              <Text style={styles.ticketMainTitle}>INITIALIZE UPLINK</Text>
+                              <Text style={[styles.ticketSubTitle, { marginBottom: 20 }]}>Enter credentials to generate your pass.</Text>
+                              
+                              <Text style={styles.inputLabel}>STUDENT NAME</Text>
+                              <TextInput style={styles.elegantInput} value={aimlName} onChangeText={setAimlName} placeholderTextColor="#888" placeholder="e.g. Sreyash" />
+
+                              <TouchableOpacity onPress={handleProceedToScanner} style={[styles.primaryActionBtn, { marginTop: 20 }]}>
+                                  <ScanBarcode size={20} color="black" style={{marginRight: 10}} />
+                                  <Text style={styles.primaryActionText}>SCAN ID CARD</Text>
+                              </TouchableOpacity>
+                          </View>
+                      </ImageBackground>
+                  </View>
+              )}
+          </View>
+      </Modal>
 
       {/* ADMIN POST MODAL */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
@@ -401,17 +560,73 @@ function showAlert(title: string, message: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 20, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
+  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   manaBadge: { flexDirection:'row', alignItems:'center', backgroundColor: 'rgba(142, 45, 226, 0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(142, 45, 226, 0.5)' },
   manaText: { color: '#E0AAFF', fontWeight: 'bold', marginLeft: 6, fontSize: 16 },
   
-  // Monitor Styles
+  // 🟢 REDESIGNED EVENT BANNER
+  eventBannerBtn: { shadowColor: '#4FACFE', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10, marginBottom: 5 },
+  eventBannerBg: { height: 90, width: '100%', borderRadius: 16 },
+  eventBannerOverlay: { flex: 1, backgroundColor: 'rgba(0,10,30,0.65)', borderRadius: 16, padding: 20, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  eventBannerTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+  eventBannerSub: { color: '#CCC', fontSize: 12, fontWeight: '500', marginTop: 4 },
+
+  // 🟢 REDESIGNED MODAL OVERLAY
+  modalBackdrop: { flex: 1, backgroundColor: '#050A1F', padding: 20 },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 50, marginBottom: 40 },
+  modalHeaderTitle: { color: '#FFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 3, opacity: 0.8 },
+
+  // 🟢 THE HORIZONTAL TICKET UI
+  ticketWrapper: { alignItems: 'center', width: '100%' },
+  ticketBg: { width: '100%', height: 220, borderRadius: 16, flexDirection: 'row', overflow: 'hidden' },
+  ticketTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,10,40,0.5)' },
+  
+  ticketStub: { width: 60, justifyContent: 'center', alignItems: 'center', borderRightWidth: 0 },
+  stubText: { color: '#FFF', fontSize: 12, fontWeight: 'bold', letterSpacing: 4, width: 200, textAlign: 'center', transform: [{ rotate: '-90deg' }], opacity: 0.7 },
+  
+  ticketDivider: { width: 2, height: '100%', borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.3)', position: 'relative', zIndex: 10 },
+  punchHoleTop: { position: 'absolute', top: -12, left: -11, width: 24, height: 24, borderRadius: 12, backgroundColor: '#050A1F' },
+  punchHoleBottom: { position: 'absolute', bottom: -12, left: -11, width: 24, height: 24, borderRadius: 12, backgroundColor: '#050A1F' },
+  
+  ticketBody: { flex: 1, padding: 20, justifyContent: 'center' },
+  ticketCollegeText: { color: '#CCC', fontSize: 10, letterSpacing: 1, fontWeight: '600' },
+  ticketMainTitle: { color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: 2, marginTop: 2 },
+  ticketSubTitle: { color: '#4FACFE', fontSize: 12, fontWeight: 'bold', letterSpacing: 1, marginTop: 2 },
+  
+  ticketDataRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' },
+  ticketLabel: { color: '#AAA', fontSize: 9, letterSpacing: 1, marginBottom: 2 },
+  ticketValue: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  
+  statusBadge: { backgroundColor: 'rgba(255, 215, 0, 0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#FFD700' },
+  statusBadgeText: { color: '#FFD700', fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
+
+  // Redemeed Stamp
+  redeemedStamp: { position: 'absolute', right: 20, bottom: 20, transform: [{ rotate: '-15deg' }], borderWidth: 3, borderColor: '#FF003C', padding: 8, borderRadius: 8 },
+  redeemedStampText: { color: '#FF003C', fontSize: 18, fontWeight: '900', letterSpacing: 2 },
+
+  // Buttons & Inputs
+  primaryActionBtn: { backgroundColor: '#FFF', width: '100%', padding: 18, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 30 },
+  primaryActionText: { color: 'black', fontWeight: '900', letterSpacing: 1, fontSize: 14 },
+  
+  goldActionBtn: { backgroundColor: '#FFD700', width: '100%', padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 30, shadowColor: '#FFD700', shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
+  goldActionText: { color: 'black', fontWeight: '900', letterSpacing: 1, fontSize: 14 },
+
+  registrationCard: { width: '100%', height: 450, borderRadius: 16, overflow: 'hidden' },
+  inputLabel: { color: '#CCC', fontSize: 10, letterSpacing: 1, marginBottom: 8 },
+  elegantInput: { backgroundColor: 'rgba(255,255,255,0.1)', color: '#FFF', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', padding: 16, borderRadius: 12, fontSize: 16 },
+
+  bottomWarningRed: { color: '#FF003C', fontSize: 12, textAlign: 'center', marginTop: 20, fontWeight: 'bold', letterSpacing: 1 },
+
+  // Scanner
+  scannerContainer: { height: 400, width: '100%', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#4FACFE' },
+  scannerTarget: { position: 'absolute', top: '25%', left: '10%', width: '80%', height: '50%', borderWidth: 2, borderColor: 'rgba(79, 172, 254, 0.6)', borderStyle: 'dashed', borderRadius: 12 },
+  cancelScanBtn: { position: 'absolute', bottom: 20, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.8)', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 20, borderWidth: 1, borderColor: '#FFF' },
+  cancelScanText: { color: '#FFF', fontWeight: 'bold', letterSpacing: 1 },
+
+  // Generic
   monitorContainer: { backgroundColor: '#111', borderRadius: 16, borderWidth: 1, borderColor: '#333', overflow: 'hidden', width: '100%' },
   monitorHeader: { flexDirection:'row', alignItems:'center', backgroundColor: '#ddd', padding: 12, justifyContent:'space-between', paddingHorizontal: 20 },
-  
-  // My Token Highlight
   myTokenBadge: { backgroundColor: '#2196f3', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginBottom: 4 },
-
   cardContainer: { marginBottom: 20, borderRadius: 20, shadowColor: "#000", shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
   cardGradient: { padding: 20, borderRadius: 20, minHeight: 120, justifyContent: 'center' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
