@@ -57,7 +57,13 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   const [promos, setPromos] = useState<any[]>([]);
   const [shopStates, setShopStates] = useState<{[key: string]: boolean}>({}); 
   const [loading, setLoading] = useState(false);
-  
+  const [isDecryptingRation, setIsDecryptingRation] = useState(false);
+  // 🟢 FOOD VOUCHER UNLOCK TIME (11:00 AM)
+const unlockTime = new Date();
+unlockTime.setHours(21, 53, 0, 0);
+
+const now = new Date();
+const isMealUnlocked = now >= unlockTime;
   // Ad Creation State
   const [showModal, setShowModal] = useState(false);
   const [adTitle, setAdTitle] = useState('');
@@ -72,7 +78,7 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   const [showAimlModal, setShowAimlModal] = useState(false);
   const [aimlName, setAimlName] = useState('');
   const [isVerifyingAiml, setIsVerifyingAiml] = useState(false);
-  const [isDecryptingRation, setIsDecryptingRation] = useState(false);
+  
   
 
   useFocusEffect(
@@ -388,108 +394,169 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
               </View>
 
               
-                {profile.food_claimed ? (
+                {!profile.is_aiml_verified ? (
 
-  /* 🟢 PHASE 3 & 4: FOOD VOUCHER */
+/* 🟢 PHASE 1 — REGISTRATION */
 
-  <View style={styles.ticketWrapper}>
-    {/* your food voucher UI */}
-  </View>
+<View style={styles.registrationCard}>
+  <ImageBackground
+    source={{ uri: BANNER_BG_URI }}
+    style={styles.ticketBg}
+    imageStyle={{ borderRadius: 16 }}
+  >
+    <View style={[styles.ticketTint,{backgroundColor:'rgba(0,0,0,0.7)'}]} />
 
-) : profile.is_aiml_verified ? (
+    <ScrollView contentContainerStyle={{ padding:25 }} style={{ maxHeight:420 }}>
 
-  /* 🟢 PHASE 2: ENTRY PASS */
+      <Text style={styles.ticketMainTitle}>INITIALIZE UPLINK</Text>
 
-  <View style={styles.ticketWrapper}>
-    <ImageBackground source={{ uri: ENTRY_TICKET_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
-      <View style={styles.ticketTint} />
+      <Text style={[styles.ticketSubTitle,{ marginBottom:20 }]}>
+        Enter credentials to generate your pass.
+      </Text>
 
-      <View style={styles.ticketStub}>
-        <Text style={styles.stubText}>NCET CSE(AI&ML)</Text>
-      </View>
+      <Text style={styles.inputLabel}>STUDENT NAME</Text>
 
-      <View style={styles.ticketDivider}>
-        <View style={styles.punchHoleTop} />
-        <View style={styles.punchHoleBottom} />
-      </View>
+      <TextInput
+        style={styles.elegantInput}
+        value={aimlName}
+        onChangeText={setAimlName}
+        placeholder="e.g. Sujan"
+        placeholderTextColor="#888"
+      />
 
-      <View style={styles.ticketBody}>
-        <Text style={styles.ticketCollegeText}>Department of CSE(AI&ML) Presents</Text>
-        <Text style={styles.ticketMainTitle}>AURORA V</Text>
-        <Text style={styles.ticketSubTitle}>6th MARCH 2026</Text>
+      <Text style={{color:"#CCC",marginTop:20}}>
+        Emergency Manual USN Entry
+      </Text>
 
-        <View style={styles.ticketDataRow}>
-          <View>
-            <Text style={styles.ticketLabel}>GUEST</Text>
-            <Text style={styles.ticketValue}>{profile.full_name}</Text>
-          </View>
+      <TextInput
+        value={manualUSN}
+        onChangeText={setManualUSN}
+        placeholder="Example: 1NC23CI057"
+        placeholderTextColor="#888"
+        autoCapitalize="characters"
+        style={styles.elegantInput}
+      />
 
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>PENDING CHECK-IN</Text>
-          </View>
+      <TouchableOpacity
+        onPress={handleManualUSNSubmit}
+        style={[styles.primaryActionBtn,{marginTop:10}]}
+      >
+        <Text style={styles.primaryActionText}>SUBMIT USN</Text>
+      </TouchableOpacity>
+
+    </ScrollView>
+  </ImageBackground>
+</View>
+
+) : !isMealUnlocked ? (
+
+/* 🟢 PHASE 2 — ENTRY PASS (Before 11AM) */
+
+<View style={styles.ticketWrapper}>
+  <ImageBackground source={{ uri: ENTRY_TICKET_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
+
+    <View style={styles.ticketTint} />
+
+    <View style={styles.ticketStub}>
+      <Text style={styles.stubText}>NCET CSE(AI&ML)</Text>
+    </View>
+
+    <View style={styles.ticketDivider}>
+      <View style={styles.punchHoleTop} />
+      <View style={styles.punchHoleBottom} />
+    </View>
+
+    <View style={styles.ticketBody}>
+
+      <Text style={styles.ticketCollegeText}>
+        Department of CSE(AI&ML) Presents
+      </Text>
+
+      <Text style={styles.ticketMainTitle}>AURORA V</Text>
+
+      <Text style={styles.ticketSubTitle}>6th MARCH 2026</Text>
+
+      <View style={styles.ticketDataRow}>
+
+        <View>
+          <Text style={styles.ticketLabel}>GUEST</Text>
+          <Text style={styles.ticketValue}>{profile.full_name}</Text>
         </View>
-      </View>
-    </ImageBackground>
 
-    <Text style={{color:"#FFD700", marginTop:20}}>
-      Your entry pass is ready.
-    </Text>
-  </View>
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusBadgeText}>
+            MEAL AT 11:00 AM
+          </Text>
+        </View>
+
+      </View>
+
+    </View>
+
+  </ImageBackground>
+
+  <Text style={{color:"#FFD700", marginTop:20}}>
+    Your entry pass is ready.
+  </Text>
+
+  <Text style={{
+    color:"#FFD700",
+    fontSize:12,
+    textAlign:"center",
+    marginTop:8
+  }}>
+    Meal voucher will unlock automatically at 11:00 AM
+  </Text>
+
+</View>
 
 ) : (
 
-  /* 🟢 PHASE 1: REGISTRATION */
+/* 🟢 PHASE 3 — FOOD VOUCHER (After 11AM) */
 
-  <View style={styles.registrationCard}>
-    <ImageBackground
-      source={{ uri: BANNER_BG_URI }}
-      style={styles.ticketBg}
-      imageStyle={{ borderRadius: 16 }}
-    >
+<View style={styles.ticketWrapper}>
+  <ImageBackground source={{ uri: FOOD_TICKET_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
 
-      <View style={[styles.ticketTint,{backgroundColor:'rgba(0,0,0,0.7)'}]} />
+    <View style={[styles.ticketTint,{ backgroundColor:'rgba(150,100,0,0.4)' }]} />
 
-      <ScrollView contentContainerStyle={{ padding:25 }} style={{ maxHeight:420 }}>
+    <View style={styles.ticketStub}>
+      <Text style={styles.stubText}>VALID - VALID</Text>
+    </View>
 
-        <Text style={styles.ticketMainTitle}>INITIALIZE UPLINK</Text>
+    <View style={styles.ticketDivider}>
+      <View style={styles.punchHoleTop}/>
+      <View style={styles.punchHoleBottom}/>
+    </View>
 
-        <Text style={[styles.ticketSubTitle,{ marginBottom:20 }]}>
-          Enter credentials to generate your pass.
-        </Text>
+    <View style={styles.ticketBody}>
 
-        <Text style={styles.inputLabel}>STUDENT NAME</Text>
+      <Text style={styles.ticketCollegeText}>AURORA V</Text>
 
-        <TextInput
-          style={styles.elegantInput}
-          value={aimlName}
-          onChangeText={setAimlName}
-          placeholder="e.g. Sujan"
-          placeholderTextColor="#888"
-        />
+      <Text style={[styles.ticketMainTitle,{ fontSize:24 }]}>
+        MEAL VOUCHER
+      </Text>
 
-        <Text style={{color:"#CCC",marginTop:20}}>
-          Emergency Manual USN Entry
-        </Text>
+      <Text style={styles.ticketSubTitle}>1 NUTRITIONAL UNIT</Text>
 
-        <TextInput
-          value={manualUSN}
-          onChangeText={setManualUSN}
-          placeholder="Example: 1NC23CI057"
-          placeholderTextColor="#888"
-          autoCapitalize="characters"
-          style={styles.elegantInput}
-        />
+      <View style={{ marginTop:'auto' }}>
+        <Text style={styles.ticketLabel}>ISSUED TO</Text>
+        <Text style={styles.ticketValue}>{profile.full_name}</Text>
+      </View>
 
-        <TouchableOpacity
-          onPress={handleManualUSNSubmit}
-          style={[styles.primaryActionBtn,{marginTop:10}]}
-        >
-          <Text style={styles.primaryActionText}>SUBMIT USN</Text>
-        </TouchableOpacity>
+    </View>
 
-      </ScrollView>
-    </ImageBackground>
-  </View>
+  </ImageBackground>
+
+  <TouchableOpacity
+    onPress={handleClaimFood}
+    style={styles.goldActionBtn}
+  >
+    <Text style={styles.goldActionText}>
+      REDEEM AT FOOD COUNTER
+    </Text>
+  </TouchableOpacity>
+
+</View>
 
 )}
               
