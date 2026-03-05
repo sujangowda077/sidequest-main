@@ -111,37 +111,30 @@ const deviceId = backCamera
   ? backCamera.deviceId
   : devices[0]?.deviceId;
 
+let controls: any;
+
 codeReader.decodeFromConstraints(
-{
-video: {
-facingMode: "environment",
-width: { ideal: 1920 },
-height: { ideal: 1080 }
-}
-},
-"qr-reader",
-(result, err) => {
+  { video: { facingMode: "environment" } },
+  "qr-reader",
+  (result, err) => {
 
-if (result) {
+    if (result) {
 
-const text = result.getText();
+      // 🛑 STOP CAMERA IMMEDIATELY
+      if (controls) controls.stop();
 
-if (text) {
-handleBarcodeScanned({
-type: "barcode",
-data: text
-});
-}
+      setIsScanningBarcode(false);
 
-}
+      handleBarcodeScanned({
+        type: "barcode",
+        data: result.getText()
+      });
 
-if (err && err.name !== "NotFoundException") {
-console.error(err);
-}
+    }
 
-})
-.then(ctrl => {
-controls = ctrl;
+  }
+).then(ctrl => {
+  controls = ctrl;
 });
 
 });
