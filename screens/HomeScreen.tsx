@@ -210,12 +210,12 @@ const isMealUnlocked = now >= unlockTime;
   const usn = manualUSN.toUpperCase().trim();
 
   // RULE 1: USN must follow NCET CSE(AI&ML) format
-  const usnPattern = /^[0-9]NC[0-9]{2}CI[0-9]{3}$/;
+  const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
 
   if (!usnPattern.test(usn)) {
     showAlert(
       "Invalid USN Format",
-      "USN must contain NC and CI.\n\nExample:\n1NC23CI057\n1NC24CI057"
+      "USN must contain the correct format.\n\nExample:\n23CI057\n24CI057"
     );
     return;
   }
@@ -265,24 +265,82 @@ const isMealUnlocked = now >= unlockTime;
   setManualUSN("");
 }
 
-  const handleClaimFood = async () => {
-      Alert.alert("REDEEM MEAL VOUCHER?", "Do not activate this until you are at the food counter. This action burns your ticket.", [
-          { text: "CANCEL", style: "cancel" },
-          { text: "REDEEM", style: "destructive", onPress: async () => {
-              setIsDecryptingRation(true);
-              for(let i=0; i<3; i++) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); await new Promise(r => setTimeout(r, 400)); }
-              try {
-                  // 🟢 BURN TICKET IN NEW TABLE
-                  const { error } = await supabase.from('aurora_tickets').update({ food_claimed: true }).eq('profile_id', profile.id);
-                  if (error) throw error;
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setProfile((prev: any) => ({ ...prev, food_claimed: true }));
-              } catch (e: any) { showAlert("Error", "Network failed."); }
-              setIsDecryptingRation(false);
-          }}
-      ]);
-  };
+  const redeemTicket = async () => {
 
+if (profile.food_claimed) {
+showAlert("Already Redeemed","This meal voucher was already used.");
+return;
+}
+
+try {
+setIsDecryptingRation(true);
+
+// vibration
+if (Platform.OS !== "web") {
+for (let i = 0; i < 3; i++) {
+await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+await new Promise(r => setTimeout(r, 400));
+}
+}
+
+const { error } = await supabase
+.from("aurora_tickets")
+.update({ food_claimed: true })
+.eq("profile_id", profile.id)
+.select();
+
+if (error) throw error;
+
+if (Platform.OS !== "web") {
+await Haptics.notificationAsync(
+Haptics.NotificationFeedbackType.Success
+);
+}
+setProfile(prev => ({
+...prev,
+food_claimed: true
+}));
+
+} catch (err) {
+
+console.log("Redeem error:", err);
+
+if (Platform.OS === "web") {
+window.alert("Could not redeem voucher");
+} else {
+Alert.alert("Error", "Could not redeem voucher");
+}
+
+}
+
+setIsDecryptingRation(false);
+
+};
+
+const handleClaimFood = () => {
+
+if (Platform.OS === "web") {
+
+const ok = window.confirm(
+"Redeem Meal Voucher?\n\nOnly press this when you are at the food counter."
+);
+
+if (ok) redeemTicket();
+
+} else {
+
+Alert.alert(
+"REDEEM MEAL VOUCHER?",
+"Do not activate this until you are at the food counter.",
+[
+{ text: "Cancel", style: "cancel" },
+{ text: "Redeem", style: "destructive", onPress: redeemTicket }
+]
+);
+
+}
+
+};
   // --- COMPONENTS ---
 
   const OrderColumn = ({ title, color, orders }: { title: string, color: string, orders: any[] }) => (
@@ -420,7 +478,7 @@ const isMealUnlocked = now >= unlockTime;
         style={styles.elegantInput}
         value={aimlName}
         onChangeText={setAimlName}
-        placeholder="e.g. Sujan"
+        placeholder="e.g. Rahul Kumar"
         placeholderTextColor="#888"
       />
 
@@ -431,7 +489,7 @@ const isMealUnlocked = now >= unlockTime;
       <TextInput
         value={manualUSN}
         onChangeText={setManualUSN}
-        placeholder="Example: 1NC23CI057"
+        placeholder="Example: 23CI057"
         placeholderTextColor="#888"
         autoCapitalize="characters"
         style={styles.elegantInput}
@@ -548,12 +606,15 @@ const isMealUnlocked = now >= unlockTime;
   </ImageBackground>
 
   <TouchableOpacity
-    onPress={handleClaimFood}
-    style={styles.goldActionBtn}
-  >
+  onPress={profile.food_claimed ? null : handleClaimFood}
+  style={[
+    styles.goldActionBtn,
+    profile.food_claimed && { backgroundColor: "#777" }
+  ]}
+>
     <Text style={styles.goldActionText}>
-      REDEEM AT FOOD COUNTER
-    </Text>
+{profile.food_claimed ? "ALREADY REDEEMED" : "REDEEM AT FOOD COUNTER"}
+</Text>
   </TouchableOpacity>
 
 </View>
