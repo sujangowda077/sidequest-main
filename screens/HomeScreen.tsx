@@ -1,9 +1,19 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/library";
+const hints = new Map();
+
+hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.QR_CODE,
+    BarcodeFormat.DATA_MATRIX,
+    BarcodeFormat.AZTEC
+]);
 import { 
   View, Text, TouchableOpacity, StyleSheet, Alert, 
   RefreshControl, Modal, TextInput, ScrollView, Image, Dimensions, Linking, Platform, ImageBackground 
 } from 'react-native';
+
 import { supabase } from '../lib/supabase';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { 
@@ -37,8 +47,18 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
       '9066282034@campus.app': 'Five Star',
       '9686050312@campus.app': 'Ground View Cafe'
   };
+  const [manualUSN, setManualUSN] = useState('');
   const safeEmail = userEmail ? userEmail.toLowerCase().trim() : '';
   const myShop = ADMIN_MAP[safeEmail];
+  function showAlert(title: string, message: string) {
+  if (Platform.OS === "web") {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+  
+   
   const isAdmin = !!myShop;
 
   // --- STATE ---
@@ -63,7 +83,8 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   const [aimlName, setAimlName] = useState('');
   const [isScanningBarcode, setIsScanningBarcode] = useState(false);
   const [isVerifyingAiml, setIsVerifyingAiml] = useState(false);
-  const [isDecryptingRation, setIsDecryptingRation] = useState(false); 
+  const [isDecryptingRation, setIsDecryptingRation] = useState(false);
+  
 
   useFocusEffect(
     useCallback(() => {
@@ -76,30 +97,44 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
 
 if (Platform.OS === "web" && isScanningBarcode) {
 
-const codeReader = new BrowserMultiFormatReader();
+const codeReader = new BrowserMultiFormatReader(hints, 800);
 
 let controls: any;
 
-codeReader.decodeFromVideoDevice(
-undefined,
-"qr-reader",
-(result, err, ctrl) => {
+codeReader.listVideoInputDevices().then((devices) => {
 
-controls = ctrl;
+const backCamera = devices.find(d =>
+  d.label.toLowerCase().includes("back")
+);
+
+const deviceId = backCamera
+  ? backCamera.deviceId
+  : devices[0]?.deviceId;
+
+codeReader
+.decodeFromVideoDevice(deviceId, "qr-reader", (result, err) => {
 
 if (result) {
+
+if (controls) controls.stop();
+
 handleBarcodeScanned({
 type: "barcode",
 data: result.getText()
 });
+
 }
 
 if (err && err.name !== "NotFoundException") {
 console.error(err);
 }
 
+})
+.then(ctrl => {
+controls = ctrl;
 });
 
+});
 return () => {
 if (controls) {
 controls.stop();
@@ -174,7 +209,7 @@ controls.stop();
   // --- ACTIONS ---
 
   async function handlePostAd() {
-      if (!adTitle || !adDesc) { Alert.alert("Missing Info", "Please add details."); return; }
+      if (!adTitle || !adDesc) { showAlert("Missing Info", "Please add details."); return; }
       const randomPaisa = Math.floor(Math.random() * 90) + 10;
       const uniqueAmount = (AD_PRICE + (randomPaisa / 100)).toFixed(2);
       const upiLink = `upi://pay?pa=${MY_UPI}&pn=CampusConnectAd&am=${uniqueAmount}&cu=INR`;
@@ -187,7 +222,7 @@ controls.stop();
 
   async function finalizeAdPost() {
       if (!adUtr || adUtr.length < 4) {
-          Alert.alert("Invalid UTR", "Please enter the last 4 digits of your payment reference.");
+          showAlert("Invalid UTR", "Please enter the last 4 digits of your payment reference.");
           return;
       }
       setShowQRModal(false);
@@ -195,7 +230,7 @@ controls.stop();
           shop_name: myShop, title: adTitle, description: adDesc, bg_color: selectedVibe, is_active: true
       });
       if (!error) { 
-          Alert.alert("Success", "Ad posted!"); 
+          showAlert("Success", "Ad posted!"); 
           setShowModal(false); 
           setAdTitle(''); 
           setAdDesc(''); 
@@ -205,14 +240,18 @@ controls.stop();
   }
 
   const handleDeleteAd = (id: string) => {
-      Alert.alert("Remove?", "Delete this ad?", [
-          { text: "Cancel" },
-          { text: "Delete", style: "destructive", onPress: async () => {
-              await supabase.from('promotions').delete().eq('id', id);
-              fetchData();
-          }}
-      ]);
-  };
+  Alert.alert("Remove?", "Delete this ad?", [
+    { text: "Cancel" },
+    {
+      text: "Delete",
+      style: "destructive",
+      onPress: async () => {
+        await supabase.from('promotions').delete().eq('id', id);
+        fetchData();
+      }
+    }
+  ]);
+};
 
   const handleReportBug = () => {
       const subject = "SideQuest Bug Report";
@@ -221,20 +260,34 @@ controls.stop();
   };
 
   // 🟢 EVENT ACTIONS
-  const handleProceedToScanner = async () => {
-  if (!aimlName.trim()) {
-    Alert.alert("Error", "Enter your name to proceed.");
+  const handleProceedToScanner = () => {
+
+  if (!aimlName || aimlName.trim().length === 0) {
+    showAlert(
+      "Name Required",
+      "Please enter your name before scanning your ID card."
+    );
     return;
   }
 
   setIsScanningBarcode(true);
+
 };
 
   const handleBarcodeScanned = async ({ type, data }: { type: string, data: string }) => {
       if (isVerifyingAiml) return; 
       setIsVerifyingAiml(true);
-      
       const scannedData = data.toUpperCase().trim();
+
+const usnPattern = /^[0-9]NC[0-9]{2}CI[0-9]{3}$/;
+
+if (!usnPattern.test(scannedData)) {
+  showAlert(
+"Invalid USN",
+"Example:\n1NC23CI057\n1NC24CI057"
+);
+return;
+}
 
       try {
           if (profile.is_aiml_verified) {
@@ -244,11 +297,11 @@ controls.stop();
                   await supabase.from('aurora_tickets').update({ has_entered: true }).eq('profile_id', profile.id);
                   setProfile((prev: any) => ({ ...prev, has_entered: true }));
                   setIsScanningBarcode(false);
-                  Alert.alert("ENTRY SECURED", "Welcome to the Fresher's Party.");
+                  showAlert("ENTRY SECURED", "Welcome to the Fresher's Party.");
               } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                   setIsScanningBarcode(false);
-                  Alert.alert("INVALID DOOR NODE", "This is not the correct entry QR code.");
+                  showAlert("INVALID DOOR NODE", "This is not the correct entry QR code.");
               }
           } else {
               // 🆔 ID CARD BARCODE LOGIC 
@@ -268,9 +321,9 @@ controls.stop();
                       setIsScanningBarcode(false);
                       // 23505 is the Postgres code for Unique Constraint Violation!
                       if (error.code === '23505') {
-                          Alert.alert("SECURITY ALERT 🚨", "This ID Card has already been claimed by another device!");
+                          showAlert("SECURITY ALERT 🚨", "This ID Card has already been claimed by another device!");
                       } else {
-                          Alert.alert("Database Error", "Network failed. Try again.");
+                          showAlert("Database Error", "Network failed. Try again.");
                       }
                       setIsVerifyingAiml(false);
                       return;
@@ -287,16 +340,69 @@ controls.stop();
                   }));
                   
                   setIsScanningBarcode(false);
-                  Alert.alert("ACCESS GRANTED", `Verified USN: ${scannedData}\n\nPass Generated Successfully.`);
+                  showAlert("ACCESS GRANTED", `Verified USN: ${scannedData}\n\nPass Generated Successfully.`);
               } else {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                   setIsScanningBarcode(false); 
-                  Alert.alert("ACCESS DENIED", "Non-AIML entity detected.");
+                  showAlert("ACCESS DENIED", "Non-AIML entity detected.");
               }
           }
-      } catch (e: any) { Alert.alert("Error", "Network failed. Try again."); }
+      } catch (e: any) { showAlert("Error", "Network failed. Try again."); }
       setIsVerifyingAiml(false);
   };
+  async function handleManualUSNSubmit() {
+
+  const usn = manualUSN.toUpperCase().trim();
+
+  const usnPattern = /^[0-9]NC[0-9]{2}CI[0-9]{3}$/;
+
+  if (!usnPattern.test(usn)) {
+    showAlert(
+      "Invalid USN",
+      "Example:\n1NC23CI057\n1NC24CI057"
+    );
+    return;
+  }
+
+  const { data } = await supabase
+    .from("aurora_tickets")
+    .select("usn")
+    .eq("usn", usn)
+    .single();
+
+  if (data) {
+    showAlert(
+      "USN Already Exists",
+      "Please enter correct USN"
+    );
+    return;
+  }
+
+  const { error } = await supabase
+    .from("aurora_tickets")
+    .insert({
+      profile_id: profile.id,
+      usn: usn,
+      full_name: aimlName,
+      has_entered: false,
+      food_claimed: false
+    });
+
+  if (error) {
+    showAlert("Database error", "Failed to generate pass.");
+    return;
+  }
+
+  showAlert("Pass generated successfully", "Your pass has been generated successfully.");
+
+  setProfile((prev:any)=>({
+    ...prev,
+    is_aiml_verified:true,
+    full_name:aimlName
+  }));
+
+  setManualUSN("");
+}
 
   const handleClaimFood = async () => {
       Alert.alert("REDEEM MEAL VOUCHER?", "Do not activate this until you are at the food counter. This action burns your ticket.", [
@@ -310,7 +416,7 @@ controls.stop();
                   if (error) throw error;
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   setProfile((prev: any) => ({ ...prev, food_claimed: true }));
-              } catch (e: any) { Alert.alert("Error", "Network failed."); }
+              } catch (e: any) { showAlert("Error", "Network failed."); }
               setIsDecryptingRation(false);
           }}
       ]);
@@ -403,13 +509,14 @@ controls.stop();
                           </View>
                       </View>
                   </ImageBackground>
+                  
               </TouchableOpacity>
 
               {promos.length === 0 ? <Text style={{color:'#666', fontStyle:'italic', marginTop: 15}}>Quiet day on campus...</Text> : <View style={{marginTop: 15}}>{promos.map(item => <PromoCard key={item.id} item={item} />)}</View>}
           </View>
 
           {/* BUG REPORT */}
-          <View style={{paddingHorizontal: 20, marginTop: 30}}>
+          <View style={{paddingHorizontal: 20, marginTop: 15, alignItems:'flex-end'}}>
               <TouchableOpacity onPress={handleReportBug} style={styles.bugReportBtn}>
                   <Bug size={16} color="#666" style={{marginRight: 8}} />
                   <Text style={{color: '#666', fontSize: 12, fontWeight: 'bold'}}>Report a Bug</Text>
@@ -429,8 +536,16 @@ controls.stop();
                   <View style={styles.scannerContainer}>
                       <View style={{ width: "100%", height: 320 }}>
                         <video
-                        id="qr-reader"
-  style={{ width: "100%", height: "320px", objectFit: "cover" }} />
+id="qr-reader"
+playsInline
+muted
+style={{
+width: "100%",
+height: "320px",
+objectFit: "cover",
+maxWidth: "100%"
+}}
+/>
 </View>
                       <View style={styles.scannerTarget} />
                       <TouchableOpacity onPress={() => setIsScanningBarcode(false)} style={styles.cancelScanBtn}><Text style={styles.cancelScanText}>CANCEL SCAN</Text></TouchableOpacity>
@@ -524,22 +639,65 @@ controls.stop();
               ) : (
                   /* 🟢 PHASE 1: REGISTRATION CARD */
                   <View style={styles.registrationCard}>
-                      <ImageBackground source={{ uri: BANNER_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
-                          <View style={[styles.ticketTint, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
-                          <View style={{ padding: 25, flex: 1, justifyContent: 'center' }}>
-                              <Text style={styles.ticketMainTitle}>INITIALIZE UPLINK</Text>
-                              <Text style={[styles.ticketSubTitle, { marginBottom: 20 }]}>Enter credentials to generate your pass.</Text>
-                              
-                              <Text style={styles.inputLabel}>STUDENT NAME</Text>
-                              <TextInput style={styles.elegantInput} value={aimlName} onChangeText={setAimlName} placeholderTextColor="#888" placeholder="e.g. Sreyash" />
+  <ImageBackground
+    source={{ uri: BANNER_BG_URI }}
+    style={styles.ticketBg}
+    imageStyle={{ borderRadius: 16 }}
+  >
 
-                              <TouchableOpacity onPress={handleProceedToScanner} style={[styles.primaryActionBtn, { marginTop: 20 }]}>
-                                  <ScanBarcode size={20} color="black" style={{marginRight: 10}} />
-                                  <Text style={styles.primaryActionText}>SCAN ID CARD</Text>
-                              </TouchableOpacity>
-                          </View>
-                      </ImageBackground>
-                  </View>
+    <View style={[styles.ticketTint, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
+
+    <ScrollView contentContainerStyle={{ padding: 25 }}>
+
+      <Text style={styles.ticketMainTitle}>INITIALIZE UPLINK</Text>
+
+      <Text style={[styles.ticketSubTitle, { marginBottom: 20 }]}>
+        Enter credentials to generate your pass.
+      </Text>
+
+      <Text style={styles.inputLabel}>STUDENT NAME</Text>
+
+      <TextInput
+autoFocus
+style={styles.elegantInput}
+value={aimlName}
+onChangeText={setAimlName}
+placeholderTextColor="#888"
+placeholder="e.g. Sreyash"
+/>
+
+      <TouchableOpacity
+        onPress={handleProceedToScanner}
+        style={[styles.primaryActionBtn, { marginTop: 20 }]}
+      >
+        <ScanBarcode size={20} color="black" style={{ marginRight: 10 }} />
+        <Text style={styles.primaryActionText}>SCAN ID CARD</Text>
+      </TouchableOpacity>
+
+      <Text style={{ color: "#CCC", marginTop: 20 }}>
+        Emergency Manual USN Entry
+      </Text>
+
+      <TextInput
+        value={manualUSN}
+        onChangeText={setManualUSN}
+        placeholder="Example: 1NC23CI057"
+        placeholderTextColor="#888"
+        autoCapitalize="characters"
+        style={styles.elegantInput}
+      />
+
+      <TouchableOpacity
+        onPress={handleManualUSNSubmit}
+        style={[styles.primaryActionBtn, { marginTop: 10 }]}
+      >
+        <Text style={styles.primaryActionText}>SUBMIT USN</Text>
+      </TouchableOpacity>
+
+    </ScrollView>
+
+  </ImageBackground>
+</View>
               )}
           </View>
       </Modal>
@@ -652,9 +810,16 @@ const styles = StyleSheet.create({
   goldActionBtn: { backgroundColor: '#FFD700', width: '100%', padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 30, shadowColor: '#FFD700', shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
   goldActionText: { color: 'black', fontWeight: '900', letterSpacing: 1, fontSize: 14 },
 
-  registrationCard: { width: '100%', height: 450, borderRadius: 16, overflow: 'hidden' },
+  registrationCard: { width: '100%',  borderRadius: 16, overflow: 'hidden' },
   inputLabel: { color: '#CCC', fontSize: 10, letterSpacing: 1, marginBottom: 8 },
-  elegantInput: { backgroundColor: 'rgba(255,255,255,0.1)', color: '#FFF', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', padding: 16, borderRadius: 12, fontSize: 16 },
+  elegantInput: {
+  color: '#FFF',
+  borderBottomWidth: 1,
+  borderColor: 'rgba(255,255,255,0.6)',
+  paddingVertical: 12,
+  fontSize: 16,
+  backgroundColor: 'transparent'
+},
 
   bottomWarningRed: { color: '#FF003C', fontSize: 12, textAlign: 'center', marginTop: 20, fontWeight: 'bold', letterSpacing: 1 },
 
