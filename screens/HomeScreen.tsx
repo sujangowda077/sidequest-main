@@ -6,8 +6,8 @@ hints.set(DecodeHintType.POSSIBLE_FORMATS, [
   BarcodeFormat.CODE_128,
   BarcodeFormat.CODE_39,
   BarcodeFormat.QR_CODE,
-    BarcodeFormat.DATA_MATRIX,
-    BarcodeFormat.AZTEC
+  BarcodeFormat.DATA_MATRIX,
+  BarcodeFormat.AZTEC
 ]);
 import { 
   View, Text, TouchableOpacity, StyleSheet, Alert, 
@@ -97,7 +97,7 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
 
 if (Platform.OS === "web" && isScanningBarcode) {
 
-const codeReader = new BrowserMultiFormatReader(hints, 800);
+const codeReader = new BrowserMultiFormatReader(hints, 1500);
 
 let controls: any;
 
@@ -111,17 +111,27 @@ const deviceId = backCamera
   ? backCamera.deviceId
   : devices[0]?.deviceId;
 
-codeReader
-.decodeFromVideoDevice(deviceId, "qr-reader", (result, err) => {
+codeReader.decodeFromConstraints(
+{
+video: {
+facingMode: "environment",
+width: { ideal: 1920 },
+height: { ideal: 1080 }
+}
+},
+"qr-reader",
+(result, err) => {
 
 if (result) {
 
-if (controls) controls.stop();
+const text = result.getText();
 
+if (text) {
 handleBarcodeScanned({
 type: "barcode",
-data: result.getText()
+data: text
 });
+}
 
 }
 
@@ -279,12 +289,12 @@ controls.stop();
       setIsVerifyingAiml(true);
       const scannedData = data.toUpperCase().trim();
 
-const usnPattern = /^[0-9]NC[0-9]{2}CI[0-9]{3}$/;
+const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
 
 if (!usnPattern.test(scannedData)) {
   showAlert(
 "Invalid USN",
-"Example:\n1NC23CI057\n1NC24CI057"
+"Example:\n23CI057\n24CI057"
 );
 return;
 }
@@ -354,12 +364,12 @@ return;
 
   const usn = manualUSN.toUpperCase().trim();
 
-  const usnPattern = /^[0-9]NC[0-9]{2}CI[0-9]{3}$/;
+  const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
 
   if (!usnPattern.test(usn)) {
     showAlert(
       "Invalid USN",
-      "Example:\n1NC23CI057\n1NC24CI057"
+      "Example:\n23CI057\n24CI057"
     );
     return;
   }
@@ -647,7 +657,11 @@ maxWidth: "100%"
 
     <View style={[styles.ticketTint, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
 
-    <ScrollView contentContainerStyle={{ padding: 25 }}>
+    <ScrollView
+contentContainerStyle={{ padding: 25 }}
+style={{ maxHeight: 420 }}
+className="auroraScroll"
+>
 
       <Text style={styles.ticketMainTitle}>INITIALIZE UPLINK</Text>
 
@@ -681,7 +695,7 @@ placeholder="e.g. Sreyash"
       <TextInput
         value={manualUSN}
         onChangeText={setManualUSN}
-        placeholder="Example: 1NC23CI057"
+        placeholder="Example: 23CI057"
         placeholderTextColor="#888"
         autoCapitalize="characters"
         style={styles.elegantInput}
