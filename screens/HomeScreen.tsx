@@ -1,14 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from "@zxing/library";
-const hints = new Map();
-
-hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-  BarcodeFormat.CODE_128,
-  BarcodeFormat.CODE_39,
-  BarcodeFormat.QR_CODE,
-  BarcodeFormat.DATA_MATRIX,
-  BarcodeFormat.AZTEC
-]);
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   View, Text, TouchableOpacity, StyleSheet, Alert, 
   RefreshControl, Modal, TextInput, ScrollView, Image, Dimensions, Linking, Platform, ImageBackground 
@@ -17,7 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { 
-  X, Zap, Store, Coffee, Lock, Trash2, CheckCircle, Bug, ScanBarcode, Ticket 
+  X, Zap, Store, Coffee, Lock, Trash2, CheckCircle, Bug, Ticket 
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -81,7 +71,6 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   // 🟢 AURORA V EVENT STATE
   const [showAimlModal, setShowAimlModal] = useState(false);
   const [aimlName, setAimlName] = useState('');
-  const [isScanningBarcode, setIsScanningBarcode] = useState(false);
   const [isVerifyingAiml, setIsVerifyingAiml] = useState(false);
   const [isDecryptingRation, setIsDecryptingRation] = useState(false);
   
@@ -93,61 +82,7 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
       return () => clearInterval(interval);
     }, [])
   );
-  useEffect(() => {
 
-if (Platform.OS === "web" && isScanningBarcode) {
-
-const codeReader = new BrowserMultiFormatReader(hints, 1500);
-
-let controls: any;
-
-codeReader.listVideoInputDevices().then((devices) => {
-
-const backCamera = devices.find(d =>
-  d.label.toLowerCase().includes("back")
-);
-
-const deviceId = backCamera
-  ? backCamera.deviceId
-  : devices[0]?.deviceId;
-
-let controls: any;
-
-codeReader.decodeFromConstraints(
-  { video: { facingMode: "environment" } },
-  "qr-reader",
-  (result, err) => {
-
-    if (result) {
-
-      if (controls) controls.stop();     // 🛑 stop camera immediately
-      setIsScanningBarcode(false);      // close scanner UI
-
-      handleBarcodeScanned({
-        type: "barcode",
-        data: result.getText()
-      });
-
-    }
-
-    if (err && err.name !== "NotFoundException") {
-      console.error(err);
-    }
-
-  }
-).then(ctrl => {
-  controls = ctrl;
-});
-});
-return () => {
-if (controls) {
-controls.stop();
-}
-};
-
-}
-
-}, [isScanningBarcode]);
 
   useEffect(() => {
     const channel = supabase
@@ -263,145 +198,37 @@ controls.stop();
       Linking.openURL(`mailto:office.sidequest@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
-  // 🟢 EVENT ACTIONS
-  const handleProceedToScanner = () => {
-
-  if (!aimlName || aimlName.trim().length === 0) {
-    showAlert(
-      "Name Required",
-      "Please enter your name before scanning your ID card."
-    );
-    return;
-  }
-
-  setIsScanningBarcode(true);
-
-};
-
-  const handleBarcodeScanned = async ({ type, data }: { type: string, data: string }) => {
-
-  if (scanLocked) return;
-  setScanLocked(true);
-
-  const scannedData = data.toUpperCase().trim();
-
-const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
-
-console.log("AIML_NODE_UPLINK_99", scannedData);
-// DOOR QR DETECTION
-if (scannedData.includes("AURORA") || scannedData.includes("ENTRY")) {
-
-  if (!profile.is_aiml_verified) {
-    showAlert("Access Denied", "Please generate your pass first.");
-    return;
-  }
-
-  await supabase
-    .from("aurora_tickets")
-    .update({ has_entered: true })
-    .eq("profile_id", profile.id);
-
-  setProfile((prev:any)=>({
-    ...prev,
-    has_entered: true
-  }));
-
-  setIsScanningBarcode(false);
-
-  showAlert("ENTRY GRANTED", "Welcome to Aurora V 🎉");
-
-  return;
-}
-
-      try {
-          if (profile.is_aiml_verified) {
-              // 🚪 DOOR NODE SCANNING LOGIC (UPDATED TABLE)
-              if (scannedData.includes("AIML_NODE_UPLINK_99")) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  await supabase.from('aurora_tickets').update({ has_entered: true }).eq('profile_id', profile.id);
-                  setProfile((prev: any) => ({ ...prev, has_entered: true }));
-                  setIsScanningBarcode(false);
-                  showAlert("ENTRY SECURED", "Welcome to the Fresher's Party.");
-              } else {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  setIsScanningBarcode(false);
-                  showAlert("INVALID DOOR NODE", "This is not the correct entry QR code.");
-              }
-          } else {
-              // 🆔 ID CARD BARCODE LOGIC 
-              if (scannedData.includes("CI")) {
-                  
-                  // 🟢 THE ANTI-CHEAT DATABASE LOCK (INSERT NEW ROW)
-                  const { error } = await supabase.from('aurora_tickets').insert({ 
-                      profile_id: profile.id,
-                      usn: scannedData,
-                      full_name: aimlName,
-                      has_entered: false, 
-                      food_claimed: false 
-                  });
-
-                  if (error) {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                      setIsScanningBarcode(false);
-                      // 23505 is the Postgres code for Unique Constraint Violation!
-                      if (error.code === '23505') {
-                          showAlert("SECURITY ALERT 🚨", "This ID Card has already been claimed by another device!");
-                      } else {
-                          showAlert("Database Error", "Network failed. Try again.");
-                      }
-                      setIsVerifyingAiml(false);
-                      return;
-                  }
-
-                  // If insert succeeds:
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setProfile((prev: any) => ({ 
-                      ...prev, 
-                      is_aiml_verified: true, 
-                      full_name: aimlName,
-                      has_entered: false,
-                      food_claimed: false 
-                  }));
-                  
-                  setIsScanningBarcode(false);
-                  showAlert("ACCESS GRANTED", `Verified USN: ${scannedData}\n\nPass Generated Successfully.`);
-              } else {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  setIsScanningBarcode(false); 
-                  showAlert("ACCESS DENIED", "Non-AIML entity detected.");
-              }
-          }
-      } catch (e: any) { showAlert("Error", "Network failed. Try again."); }
-      setIsVerifyingAiml(false);
-  };
+  
   async function handleManualUSNSubmit() {
 
   const usn = manualUSN.toUpperCase().trim();
 
-  const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
+  const usnPattern = /^[0-9]NC[0-9]{2}CI[0-9]{3}$/;
 
   if (!usnPattern.test(usn)) {
     showAlert(
       "Invalid USN",
-      "Example:\n23CI057\n24CI057"
+      "Example:\n1NC23CI057"
     );
     return;
   }
 
+  // Check if already used
   const { data } = await supabase
     .from("aurora_tickets")
     .select("usn")
     .eq("usn", usn)
-    .single();
+    .maybeSingle();
 
   if (data) {
     showAlert(
-      "USN Already Exists",
-      "Please enter correct USN"
+      "USN Already Used",
+      "This USN has already generated a pass."
     );
     return;
   }
 
+  // Insert new ticket
   const { error } = await supabase
     .from("aurora_tickets")
     .insert({
@@ -413,17 +240,17 @@ if (scannedData.includes("AURORA") || scannedData.includes("ENTRY")) {
     });
 
   if (error) {
-    showAlert("Database error", "Failed to generate pass.");
+    showAlert("Database Error", "Could not generate pass.");
     return;
   }
-
-  showAlert("Pass generated successfully", "Your pass has been generated successfully.");
 
   setProfile((prev:any)=>({
     ...prev,
     is_aiml_verified:true,
     full_name:aimlName
   }));
+
+  showAlert("Pass Generated", "Your event pass is ready.");
 
   setManualUSN("");
 }
@@ -549,32 +376,15 @@ if (scannedData.includes("AURORA") || scannedData.includes("ENTRY")) {
       </ScrollView>
 
       {/* 🟢 REDESIGNED EVENT TICKET MODAL */}
-      <Modal visible={showAimlModal} transparent animationType="slide" onRequestClose={() => {setShowAimlModal(false); setIsScanningBarcode(false);}}>
+      <Modal visible={showAimlModal} transparent animationType="slide" onRequestClose={() => setShowAimlModal(false)}>
           <View style={styles.modalBackdrop}>
               <View style={styles.modalHeaderRow}>
                   <Text style={styles.modalHeaderTitle}>EVENT PORTAL</Text>
-                  <TouchableOpacity onPress={() => {setShowAimlModal(false); setIsScanningBarcode(false);}}><X size={28} color="#FFF" /></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowAimlModal(false)}><X size={28} color="#FFF" /></TouchableOpacity>
               </View>
 
-              {isScanningBarcode ? (
-                  <View style={styles.scannerContainer}>
-                      <View style={{ width: "100%", height: 320 }}>
-                        <video
-id="qr-reader"
-playsInline
-muted
-style={{
-width: "100%",
-height: "320px",
-objectFit: "cover",
-maxWidth: "100%"
-}}
-/>
-</View>
-                      <View style={styles.scannerTarget} />
-                      <TouchableOpacity onPress={() => setIsScanningBarcode(false)} style={styles.cancelScanBtn}><Text style={styles.cancelScanText}>CANCEL SCAN</Text></TouchableOpacity>
-                  </View>
-              ) : (profile.has_entered && profile.is_aiml_verified) ? (
+              
+                ? (
                   /* 🟢 PHASE 3 & 4: HORIZONTAL MEAL VOUCHER TICKET */
                   <View style={styles.ticketWrapper}>
                       <ImageBackground source={{ uri: FOOD_TICKET_BG_URI }} style={styles.ticketBg} imageStyle={{ borderRadius: 16 }}>
@@ -654,10 +464,10 @@ maxWidth: "100%"
                           </View>
                       </ImageBackground>
 
-                      <TouchableOpacity onPress={() => setIsScanningBarcode(true)} style={styles.primaryActionBtn}>
-                          <ScanBarcode size={20} color="black" style={{marginRight: 10}} />
-                          <Text style={styles.primaryActionText}>SCAN DOOR QR TO ENTER</Text>
-                      </TouchableOpacity>
+                      <Text style={{color:"#FFD700", marginTop:20}}>
+Your entry pass is ready.
+</Text>
+                          
                   </View>
 
               ) : (
@@ -694,13 +504,7 @@ placeholderTextColor="#888"
 placeholder="e.g. Sreyash"
 />
 
-      <TouchableOpacity
-        onPress={handleProceedToScanner}
-        style={[styles.primaryActionBtn, { marginTop: 20 }]}
-      >
-        <ScanBarcode size={20} color="black" style={{ marginRight: 10 }} />
-        <Text style={styles.primaryActionText}>SCAN ID CARD</Text>
-      </TouchableOpacity>
+      
 
       <Text style={{ color: "#CCC", marginTop: 20 }}>
         Emergency Manual USN Entry
