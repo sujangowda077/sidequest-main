@@ -284,13 +284,7 @@ controls.stop();
 
 const usnPattern = /^[0-9]{2}CI[0-9]{3}$/;
 
-if (!usnPattern.test(scannedData)) {
-  showAlert(
-"Invalid USN",
-"Example:\n23CI057\n24CI057"
-);
-return;
-}
+console.log("AIML_NODE_UPLINK_99", scannedData);
 
       try {
           if (profile.is_aiml_verified) {
