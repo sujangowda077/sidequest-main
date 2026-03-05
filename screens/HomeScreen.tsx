@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { 
   View, Text, TouchableOpacity, StyleSheet, Alert, 
   RefreshControl, Modal, TextInput, ScrollView, Image, Dimensions, Linking, Platform, ImageBackground 
@@ -10,7 +10,7 @@ import {
   X, Zap, Store, Coffee, Lock, Trash2, CheckCircle, Bug, ScanBarcode, Ticket 
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+
 import * as Haptics from 'expo-haptics';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -47,7 +47,7 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   const [promos, setPromos] = useState<any[]>([]);
   const [shopStates, setShopStates] = useState<{[key: string]: boolean}>({}); 
   const [loading, setLoading] = useState(false);
-
+  
   // Ad Creation State
   const [showModal, setShowModal] = useState(false);
   const [adTitle, setAdTitle] = useState('');
@@ -61,7 +61,6 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
   // 🟢 AURORA V EVENT STATE
   const [showAimlModal, setShowAimlModal] = useState(false);
   const [aimlName, setAimlName] = useState('');
-  const [permission, requestPermission] = useCameraPermissions();
   const [isScanningBarcode, setIsScanningBarcode] = useState(false);
   const [isVerifyingAiml, setIsVerifyingAiml] = useState(false);
   const [isDecryptingRation, setIsDecryptingRation] = useState(false); 
@@ -77,20 +76,35 @@ export default function HomeScreen({ userEmail }: { userEmail: string }) {
 
 if (Platform.OS === "web" && isScanningBarcode) {
 
-const scanner = new Html5QrcodeScanner(
-"qr-reader",
-{ fps: 10, qrbox: 250 },
-false
-);
+const codeReader = new BrowserMultiFormatReader();
 
-scanner.render(
-(decodedText) => {
-handleBarcodeScanned({ type: "qr", data: decodedText });
-},
-(error) => {
-console.log(error);
+let controls: any;
+
+codeReader.decodeFromVideoDevice(
+undefined,
+"qr-reader",
+(result, err, ctrl) => {
+
+controls = ctrl;
+
+if (result) {
+handleBarcodeScanned({
+type: "barcode",
+data: result.getText()
+});
 }
-);
+
+if (err && err.name !== "NotFoundException") {
+console.error(err);
+}
+
+});
+
+return () => {
+if (controls) {
+controls.stop();
+}
+};
 
 }
 
@@ -208,13 +222,13 @@ console.log(error);
 
   // 🟢 EVENT ACTIONS
   const handleProceedToScanner = async () => {
-      if (!aimlName.trim()) { Alert.alert("Error", "Enter your name to proceed."); return; }
-      if (!permission?.granted) {
-          const { granted } = await requestPermission();
-          if (!granted) { Alert.alert("Camera Disabled", "Camera access is required."); return; }
-      }
-      setIsScanningBarcode(true);
-  };
+  if (!aimlName.trim()) {
+    Alert.alert("Error", "Enter your name to proceed.");
+    return;
+  }
+
+  setIsScanningBarcode(true);
+};
 
   const handleBarcodeScanned = async ({ type, data }: { type: string, data: string }) => {
       if (isVerifyingAiml) return; 
@@ -413,8 +427,10 @@ console.log(error);
 
               {isScanningBarcode ? (
                   <View style={styles.scannerContainer}>
-                      <View style={{ width: "100%", height: 300 }}>
-  <div id="qr-reader" style={{ width: "100%" }} />
+                      <View style={{ width: "100%", height: 320 }}>
+                        <video
+                        id="qr-reader"
+  style={{ width: "100%", height: "320px", objectFit: "cover" }} />
 </View>
                       <View style={styles.scannerTarget} />
                       <TouchableOpacity onPress={() => setIsScanningBarcode(false)} style={styles.cancelScanBtn}><Text style={styles.cancelScanText}>CANCEL SCAN</Text></TouchableOpacity>
