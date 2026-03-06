@@ -22,9 +22,21 @@ export default function ProfileScreen({ session, isLockdown }: { session: any, i
 const [alertVisible, setAlertVisible] = useState(false);
 const [alertTitle, setAlertTitle] = useState('');
 const [alertMessage, setAlertMessage] = useState('');
+const [refreshing, setRefreshing] = useState(false);
+const onRefresh = async () => {
+  setRefreshing(true);
+  await Promise.all([
+  fetchProfile(),
+  fetchVerifications(),
+  fetchBannedUsers()
+]);
+  setRefreshing(false);
+};
 
 const confirmActionRef = useRef<null | (() => void)>(null);
 const [showCancel, setShowCancel] = useState(false);
+const [lastSync, setLastSync] = useState<Date | null>(null);
+
 const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
 
 function showAlert(
@@ -42,6 +54,7 @@ function showAlert(
   setAlertType(type);
 }
   const [profile, setProfile] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [devEnabled, setDevEnabled] = useState(false);
   
   // Modals
@@ -69,6 +82,7 @@ function showAlert(
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
   const [bannedUsers, setBannedUsers] = useState<any[]>([]);
   const [viewIdImage, setViewIdImage] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   // Form State
   const [tempName, setTempName] = useState('');
@@ -85,21 +99,33 @@ function showAlert(
   }, []);
 
   async function fetchProfile() {
-    if (!session?.user) return;
-    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-    if (data) {
-        setProfile(data);
-        setTempName(data.full_name || '');
-        setTempPhone(data.phone || '');
-        setTempRecoveryEmail(data.recovery_email || '');
-        setTempUpi(data.upi_id || '');
-        
-        // Update lockdown check to require is_email_verified instead of phone verification
-        if (isLockdown && (!data.full_name || !data.phone || !data.recovery_email || !data.is_email_verified)) {
-            setShowEditProfile(true);
-        }
-    }
+  if (!session?.user) return;
+
+  setLoadingProfile(true);
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .single();
+
+  if (error) {
+    showAlert("Error", error.message);
+    setLoadingProfile(false);
+    return;
   }
+
+  if (data) {
+    setProfile(data);
+    setTempName(data.full_name || '');
+    setTempPhone(data.phone || '');
+    setTempRecoveryEmail(data.recovery_email || '');
+    setTempUpi(data.upi_id || '');
+  }
+
+  setLastSync(new Date());
+setLoadingProfile(false);
+}
 
   async function checkIntro() {
       const { data } = await supabase.from('profiles').select('has_seen_intro').eq('id', session.user.id).single();
@@ -156,6 +182,7 @@ function showAlert(
   }
 
   async function pickAndUploadID() {
+    if (uploading) return;
       if (profile?.is_banned) { showAlert("Account Banned", "You cannot upload an ID while banned. Appeal via Chat."); return; }
       if (profile?.is_verified) { showAlert("Verified", "Your ID is already verified. You cannot change it."); return; }
 
@@ -232,10 +259,10 @@ function showAlert(
   };
 
   const verifyEmailOtp = async () => {
-      if (!emailCode || emailCode.length < 6) {
-          showAlert("Invalid Code", "Please enter the 6-digit OTP from your email.");
-          return;
-      }
+      if (!/^\d{6}$/.test(emailCode)) {
+  showAlert("Invalid Code", "Enter the 6-digit code from your email.");
+  return;
+}
       
       setVerifyingEmail(true);
       
@@ -297,38 +324,43 @@ function showAlert(
 };
 
   async function handleWithdraw() {
-      if ((profile?.mana_balance || 0) < 1000) {
-          showAlert("Low Balance", "You need at least 1000 Mana to withdraw.");
-          return;
-      }
 
-      const newBalance = (profile?.mana_balance || 0) - 1000;
-      const { error } = await supabase.from('profiles').update({ mana_balance: newBalance }).eq('id', session.user.id);
+  if (withdrawing) return;
 
-      if (error) {
-          showAlert("Error", "Could not deduct Mana.");
-          return;
-      }
+  setWithdrawing(true);
 
-      await supabase.from('withdrawals').insert({
-          user_id: session.user.id,
-          amount_mana: 1000,
-          amount_rupees: 10,
-          upi_id: profile?.phone || 'Unknown' 
-      });
-
-      const email = "office.sidequest26@gmail.com";
-      const subject = "Mana Withdrawal";
-      const body = `add mana to account ${profile.phone}`;
-      const url = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-      Linking.openURL(url).catch(err => {
-          showAlert("Error", "Could not open mail app. Please manually email office.sidequest26@gmail.com");
-      });
-
-      showAlert("Success", "1000 Mana deducted. Email draft created.");
-      fetchProfile();
+  if ((profile?.mana_balance || 0) < 1000) {
+    showAlert("Low Balance", "You need at least 1000 Mana to withdraw.");
+    setWithdrawing(false);
+    return;
   }
+
+  try {
+
+    const email = "office.sidequest26@gmail.com";
+    const subject = "Mana Withdrawal";
+    const body = `add mana to account ${profile.phone}`;
+    const url = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    await Linking.openURL(url);
+
+    const newBalance = (profile?.mana_balance || 0) - 1000;
+
+    await supabase
+      .from('profiles')
+      .update({ mana_balance: newBalance })
+      .eq('id', session.user.id);
+
+    showAlert("Success", "1000 Mana deducted. Email draft created.");
+
+    fetchProfile();
+
+  } catch (e) {
+    showAlert("Error", "Could not open mail app.");
+  }
+
+  setWithdrawing(false);
+}
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -349,7 +381,13 @@ function showAlert(
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 150 }}>
+      <ScrollView
+  showsVerticalScrollIndicator={false}
+  refreshControl={
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+  }
+  contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
+>
         
         {isLockdown && (
             <View style={{backgroundColor: '#FF9800', padding: 15, borderRadius: 12, marginBottom: 20, flexDirection:'row', alignItems:'center'}}>
@@ -371,7 +409,13 @@ function showAlert(
           <View style={styles.avatar}><Text style={{ fontSize: 30 }}>{profile?.avatar_url ? '😎' : '👤'}</Text></View>
           <View>
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.text }}>{profile?.full_name || 'New Student'}</Text>
-            <Text style={{ color: '#888' }}>{session?.user?.email}</Text>
+            <View style={{flexDirection:'row',alignItems:'center'}}>
+  <Text style={{ color: '#888' }}>{session?.user?.email}</Text>
+
+  {profile?.is_email_verified && (
+    <CheckCircle size={14} color="#00E676" style={{marginLeft:5}} />
+  )}
+</View>
             {profile?.is_banned && <Text style={{ color: '#ff4757', fontWeight: 'bold', marginTop: 5 }}>🚫 ACCOUNT BANNED</Text>}
           </View>
         </View>
@@ -380,10 +424,28 @@ function showAlert(
             <View>
                 <Text style={{color:'white', fontSize: 12, fontWeight:'bold', opacity: 0.8}}>MANA BALANCE</Text>
                 <Text style={{color:'white', fontSize: 32, fontWeight:'bold'}}>⚡ {profile?.mana_balance || 0}</Text>
-                <Text style={{color:'rgba(255,255,255,0.8)', fontSize: 12}}>≈ ₹{(profile?.mana_balance || 0) / 100}</Text>
+                <Text style={{color:'rgba(255,255,255,0.8)', fontSize: 12}}>≈ ₹{((profile?.mana_balance || 0) / 100).toFixed(2)}</Text>
             </View>
             <TouchableOpacity
-  onPress={handleWithdraw}
+  onPress={() => {
+
+    if ((profile?.mana_balance || 0) < 1000) {
+      showAlert(
+        "Mana Too Low ⚡",
+        "You need at least 1000 Mana to withdraw.\n\nComplete quests or deliveries to earn more Mana."
+      );
+      return;
+    }
+
+    showAlert(
+      "Withdraw Mana",
+      "Withdraw 1000 Mana (₹10)?",
+      handleWithdraw,
+      true
+    );
+
+  }}
+  disabled={withdrawing}
   style={{
     backgroundColor:'white',
     paddingHorizontal: 15,
@@ -427,7 +489,9 @@ function showAlert(
             ) : (
                 <TouchableOpacity onPress={pickAndUploadID} style={styles.uploadBtn}>
                     {uploading ? <ActivityIndicator color="black" /> : <Upload size={20} color="black" />}
-                    <Text style={{color: 'black', fontWeight:'bold', marginLeft: 10}}>{uploading ? 'Uploading...' : 'Upload ID Card (Max 2MB)'}</Text>
+                    <Text style={{color: 'black', fontWeight:'bold', marginLeft: 10}}>
+  {uploading ? 'Uploading ID...' : 'Upload Student ID (Max 2MB)'}
+</Text>
                 </TouchableOpacity>
             )}
         </View>
@@ -444,6 +508,18 @@ function showAlert(
         <TouchableOpacity onPress={() => setShowTerms(true)} style={[styles.option, { borderBottomColor: '#333' }]}><Shield size={20} color={colors.text} /><Text style={[styles.optionText, { color: colors.text }]}>Terms & Conditions</Text></TouchableOpacity>
         
         {isDev && (<View style={[styles.card, { backgroundColor: 'rgba(255, 87, 34, 0.1)', borderColor: '#FF5722', borderWidth: 1, marginTop: 20 }]}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flex:1 }}><View style={{ flexDirection: 'row', alignItems: 'center' }}><Shield size={24} color="#FF5722" /><View style={{ marginLeft: 15 }}><Text style={{ fontSize: 18, fontWeight: 'bold', color: '#FF5722' }}>God Mode</Text><Text style={{ color: '#FF5722', fontSize: 12, opacity: 0.8 }}>Bypass Payments</Text></View></View><Switch value={devEnabled} onValueChange={toggleDevMode} trackColor={{ false: "#767577", true: "#FF5722" }} thumbColor={devEnabled ? "#fff" : "#f4f3f4"} /></View></View>)}
+      {lastSync && (
+  <Text
+    style={{
+      textAlign: 'center',
+      color: '#666',
+      marginTop: 20,
+      fontSize: 12
+    }}
+  >
+    🔄 Last synced: {lastSync.toLocaleTimeString()}
+  </Text>
+)}
       </ScrollView>
 
       {/* Modals */}
@@ -526,6 +602,18 @@ function showAlert(
                     <Save size={20} color="black" />
                     <Text style={{color:'black', fontWeight:'bold', marginLeft: 10}}>Save Changes</Text>
                 </TouchableOpacity>
+                {lastSync && (
+  <Text
+    style={{
+      textAlign: 'center',
+      color: '#666',
+      marginTop: 20,
+      fontSize: 12
+    }}
+  >
+    🔄 Last synced: {lastSync.toLocaleTimeString()}
+  </Text>
+)}
             </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
