@@ -183,20 +183,7 @@ useEffect(() => {
   ).start();
 }, []);
 
-useEffect(() => {
-  if (myOrders.length > 0) {
-    const activeIndex = myOrders.findIndex(o =>
-      o.status !== 'delivered' && o.status !== 'cancelled'
-    );
 
-    if (activeIndex >= 0 && flatListRef.current) {
-      flatListRef.current.scrollToIndex({
-        index: activeIndex,
-        animated: true,
-      });
-    }
-  }
-}, [myOrders]);
 
   useEffect(() => {
       if (!isAdmin) return;
@@ -763,7 +750,11 @@ setTimeout(() => setShowConfetti(false), 3000);
             <TouchableOpacity onPress={() => setAdminView('dashboard')} style={{padding:8, backgroundColor:colors.card, borderRadius:12}}><ArrowLeft size={24} color={colors.text}/></TouchableOpacity>
             <Text style={{fontSize: 24, fontWeight:'bold', color: colors.text, marginLeft: 15}}>Payouts</Text>
         </View>
-        <FlatList data={payouts} keyExtractor={item => item.runner_id} contentContainerStyle={{padding: 20}} renderItem={({item}) => (
+        <FlatList data={payouts} keyExtractor={item => item.runner_id} contentContainerStyle={{padding: 20}}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={loadAllData} tintColor="#00E676" />
+          }
+          renderItem={({item}) => (
             <View style={[styles.adminListCard, {backgroundColor: colors.card, justifyContent:'space-between'}]}>
                 <View><Text style={{fontSize: 18, fontWeight:'bold', color: colors.text}}>{item.name}</Text><Text style={{color:'#888'}}>{item.count} Deliveries</Text></View>
                 <View style={{alignItems:'flex-end'}}>
@@ -788,7 +779,12 @@ setTimeout(() => setShowConfetti(false), 3000);
                 <TouchableOpacity onPress={() => setAdminView('dashboard')} style={{padding:8, backgroundColor:colors.card, borderRadius:12}}><ArrowLeft size={24} color={colors.text}/></TouchableOpacity>
                 <Text style={{fontSize: 24, fontWeight:'bold', color: colors.text, marginLeft: 15}}>Server Payments</Text>
             </View>
-            <View style={{padding: 20}}>
+            <ScrollView
+              contentContainerStyle={{padding: 20}}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={loadAllData} tintColor="#00E676" />
+              }
+            >
                 <View style={[styles.adminListCard, {backgroundColor: 'rgba(255, 152, 0, 0.1)', flexDirection:'column', alignItems:'center', paddingVertical: 40, borderWidth: 1, borderColor: '#ff9800'}]}>
                     <Text style={{fontSize: 16, color: '#888', marginBottom: 10}}>Total Platform Fees</Text>
                     <Text style={{fontSize: 48, fontWeight:'bold', color: '#ff9800'}}>₹{amount}</Text>
@@ -796,7 +792,7 @@ setTimeout(() => setShowConfetti(false), 3000);
                 <TouchableOpacity onPress={() => openVendorPayment(ADMIN_UPI_ID, "SideQuest Admin", amount, 'SERVER')} style={{backgroundColor: '#ff9800', padding: 20, borderRadius: 16, alignItems:'center', marginTop: 20}}>
                     <Text style={{color: 'black', fontWeight:'bold', fontSize: 18}}>Scan & Pay</Text>
                 </TouchableOpacity>
-            </View>
+            </ScrollView>
             <Modal visible={alertVisible} transparent animationType="fade">
   <View style={{
     flex: 1,
@@ -897,7 +893,10 @@ setTimeout(() => setShowConfetti(false), 3000);
         <FlatList 
             data={menuItems.filter(i => i.name.toLowerCase().includes(menuSearchQuery.toLowerCase()))} 
             keyExtractor={item => item.id} 
-            contentContainerStyle={{padding: 20}} 
+            contentContainerStyle={{padding: 20}}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={loadAllData} tintColor="#00E676" />
+            }
             renderItem={({item}) => (
                 <View style={[styles.adminListCard, {backgroundColor: colors.card}]}>
                     <TouchableOpacity onPress={() => { setEditingItem(item); setNewName(item.name); setNewPrice(item.price.toString()); }} style={{flex:1}}>
@@ -920,7 +919,10 @@ setTimeout(() => setShowConfetti(false), 3000);
         <FlatList 
             data={orders.filter(filterFn)} 
             keyExtractor={item => item.id} 
-            contentContainerStyle={{padding: 20}} 
+            contentContainerStyle={{padding: 20}}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={loadAllData} tintColor="#00E676" />
+            }
             renderItem={({item}) => {
                 
                 const isLocked = adminView === 'scheduled' && !isTimeReady(item.requested_time, currentTime);
@@ -1032,10 +1034,28 @@ setTimeout(() => setShowConfetti(false), 3000);
       
 
       <FlatList
+  ref={flatListRef}
   style={{ flex: 1 }}
   data={filteredItems}
-  keyExtractor={item => item.id}
-  contentContainerStyle={{ padding: 20, paddingBottom: 150 }}
+  keyExtractor={(item) => item.id}
+
+  // ⚡ PERFORMANCE SETTINGS
+  initialNumToRender={40}
+  maxToRenderPerBatch={30}
+  updateCellsBatchingPeriod={50}
+  windowSize={15}
+  removeClippedSubviews={true}
+
+  keyboardShouldPersistTaps="handled"
+
+  // 🧠 PREVENT SCROLL BUGS
+  contentContainerStyle={{
+    paddingHorizontal: 20,
+    paddingBottom: 160
+  }}
+
+  ListFooterComponent={<View style={{ height: 120 }} />}
+
   refreshControl={
     <RefreshControl
       refreshing={refreshing}
@@ -1045,129 +1065,219 @@ setTimeout(() => setShowConfetti(false), 3000);
   }
 
   ListHeaderComponent={
-    <View style={{  paddingHorizontal: 20, paddingBottom: 10 }}>
-          <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
-              <View>
-                  <Text style={{fontSize: 28, fontWeight:'bold', color: colors.text}}>Campus Eats 🍔</Text>
-                  
-                  {!shopStatus && (
-                      <Text style={{color: '#FF5252', fontWeight: 'bold', fontSize: 12, marginTop: 2}}>🔴 CURRENTLY CLOSED</Text>
-                  )}
-              </View>
-              <JuicyButton onPress={() => { fetchMyOrders(); setShowMyOrders(true); }} style={styles.myOrdersBtn} scaleTo={0.9}>
-                  <Receipt size={18} color="black" />
-                  <Text style={{color:'black', fontWeight:'bold', marginLeft: 5}}>My Orders</Text>
-              </JuicyButton>
-          </View>
-
-          <View style={styles.shopToggleContainer}>
-              <JuicyButton onPress={() => {
-  setSelectedShop('Five Star');
-  setCart({});
-  loadAllData();  // 🔥 ADD THIS
-}} style={[styles.shopTab, selectedShop === 'Five Star' && styles.shopTabActive]} scaleTo={0.95}>
-                  <Utensils size={18} color={selectedShop === 'Five Star' ? 'white' : '#888'} /><Text style={[styles.shopTabText, selectedShop === 'Five Star' && {color:'white'}]}>Five Star</Text>
-              </JuicyButton>
-              <JuicyButton onPress={() => { setSelectedShop('Ground View Cafe'); loadAllData(); setCart({}); }} style={[styles.shopTab, selectedShop === 'Ground View Cafe' && styles.shopTabActive]} scaleTo={0.95}>
-                  <Coffee size={18} color={selectedShop === 'Ground View Cafe' ? 'white' : '#888'} /><Text style={[styles.shopTabText, selectedShop === 'Ground View Cafe' && {color:'white'}]}>Ground View</Text>
-              </JuicyButton>
-          </View>
-
-          <View style={{flexDirection:'row', gap: 10, marginTop: 15}}>
-              <View style={[styles.searchBar, {backgroundColor: colors.card}]}>
-                  <Search size={20} color="#888" />
-                  <TextInput placeholder={`Search ${selectedShop}...`} placeholderTextColor="#888" value={searchQuery} onChangeText={setSearchQuery} style={{flex:1, marginLeft: 10, color: colors.text}} />
-                  <JuicyButton onPress={() => setShowFilterModal(true)}>
-                      <Filter size={20} color={colors.text} />
-                  </JuicyButton>
-              </View>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop: 10}}>
-              {categories.map(cat => (
-                  <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)} style={[styles.catTab, selectedCategory === cat && {backgroundColor: colors.text}]}>
-                      <Text style={{color: selectedCategory === cat ? colors.background : colors.text, fontWeight:'bold'}}>{cat}</Text>
-                  </TouchableOpacity>
-              ))}
-          </ScrollView>
-      </View>
-  }
-
-  renderItem={({ item }) => (
-  <View
-    style={[
-      styles.menuCard,
-      {
-        backgroundColor: colors.card,
-        opacity: item.is_available ? 1 : 0.6
-      }
-    ]}
-  >
-    <View style={{ flex: 1 }}>
-      <Text style={{ fontSize: 17, fontWeight: "bold", color: colors.text }}>
-        {item.name}
-      </Text>
-      <Text style={{ color: "#888", fontSize: 12 }}>
-        {item.category}
-      </Text>
-      <Text
-        style={{
-          color: colors.primary,
-          fontWeight: "bold",
-          fontSize: 16
-        }}
-      >
-        ₹{item.price}
-      </Text>
-    </View>
-
-    {item.is_available ? (
-      cart[item.id] ? (
-        <View style={styles.qtyControl}>
-          <JuicyButton onPress={() => updateCart(item.id, -1)} scaleTo={0.8}>
-            <Minus size={18} color="white" />
-          </JuicyButton>
-
-          <Text style={{ marginHorizontal: 10, color: "white" }}>
-            {cart[item.id]}
+    <View style={{ paddingHorizontal: 10 }}>
+      
+      <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
+        <View>
+          <Text style={{fontSize: 28, fontWeight:'bold', color: colors.text}}>
+            Campus Eats 🍔
           </Text>
 
-          <JuicyButton onPress={() => updateCart(item.id, 1)} scaleTo={0.8}>
-            <Plus size={18} color="white" />
-          </JuicyButton>
+          {!shopStatus && (
+            <Text style={{
+              color: '#FF5252',
+              fontWeight: 'bold',
+              fontSize: 12,
+              marginTop: 2
+            }}>
+              🔴 CURRENTLY CLOSED
+            </Text>
+          )}
         </View>
-      ) : (
+
         <JuicyButton
-          onPress={() => updateCart(item.id, 1)}
-          style={styles.addBtn}
+          onPress={() => {
+            fetchMyOrders();
+            setShowMyOrders(true);
+          }}
+          style={styles.myOrdersBtn}
           scaleTo={0.9}
         >
-          <Text style={{ color: "black", fontWeight: "bold" }}>
-            ADD
+          <Receipt size={18} color="black" />
+          <Text style={{color:'black', fontWeight:'bold', marginLeft: 5}}>
+            My Orders
           </Text>
         </JuicyButton>
-      )
-    ) : (
-      <View
-        style={{
-          backgroundColor: "#333",
-          padding: 8,
-          borderRadius: 8
-        }}
+      </View>
+
+
+      {/* SHOP SWITCH */}
+      <View style={styles.shopToggleContainer}>
+        <JuicyButton
+          onPress={() => {
+            setSelectedShop('Five Star');
+            setCart({});
+            loadAllData();
+          }}
+          style={[
+            styles.shopTab,
+            selectedShop === 'Five Star' && styles.shopTabActive
+          ]}
+          scaleTo={0.95}
+        >
+          <Utensils size={18} color={selectedShop === 'Five Star' ? 'white' : '#888'} />
+          <Text style={[
+            styles.shopTabText,
+            selectedShop === 'Five Star' && {color:'white'}
+          ]}>
+            Five Star
+          </Text>
+        </JuicyButton>
+
+        <JuicyButton
+          onPress={() => {
+            setSelectedShop('Ground View Cafe');
+            loadAllData();
+            setCart({});
+          }}
+          style={[
+            styles.shopTab,
+            selectedShop === 'Ground View Cafe' && styles.shopTabActive
+          ]}
+          scaleTo={0.95}
+        >
+          <Coffee size={18} color={selectedShop === 'Ground View Cafe' ? 'white' : '#888'} />
+          <Text style={[
+            styles.shopTabText,
+            selectedShop === 'Ground View Cafe' && {color:'white'}
+          ]}>
+            Ground View
+          </Text>
+        </JuicyButton>
+      </View>
+
+
+      {/* SEARCH */}
+      <View style={{flexDirection:'row', gap: 10, marginTop: 15}}>
+        <View style={[styles.searchBar, {backgroundColor: colors.card}]}>
+          <Search size={20} color="#888" />
+
+          <TextInput
+            placeholder={`Search ${selectedShop}...`}
+            placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={{flex:1, marginLeft: 10, color: colors.text}}
+          />
+
+          <JuicyButton onPress={() => setShowFilterModal(true)}>
+            <Filter size={20} color={colors.text} />
+          </JuicyButton>
+        </View>
+      </View>
+
+
+      {/* CATEGORY SCROLL */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{marginTop: 10}}
       >
+        {categories.map(cat => (
+          <TouchableOpacity
+            key={cat}
+            onPress={() => setSelectedCategory(cat)}
+            style={[
+              styles.catTab,
+              selectedCategory === cat && {backgroundColor: colors.text}
+            ]}
+          >
+            <Text
+              style={{
+                color: selectedCategory === cat
+                  ? colors.background
+                  : colors.text,
+                fontWeight:'bold'
+              }}
+            >
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+    </View>
+  }
+
+
+  renderItem={({ item }) => (
+    <View
+      style={[
+        styles.menuCard,
+        {
+          backgroundColor: colors.card,
+          opacity: item.is_available ? 1 : 0.6
+        }
+      ]}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 17, fontWeight: "bold", color: colors.text }}>
+          {item.name}
+        </Text>
+
+        <Text style={{ color: "#888", fontSize: 12 }}>
+          {item.category}
+        </Text>
+
         <Text
           style={{
-            color: "#888",
-            fontSize: 10,
-            fontWeight: "bold"
+            color: colors.primary,
+            fontWeight: "bold",
+            fontSize: 16
           }}
         >
-          SOLD OUT
+          ₹{item.price}
         </Text>
       </View>
-    )}
-  </View>
-)}
+
+
+      {item.is_available ? (
+        cart[item.id] ? (
+          <View style={styles.qtyControl}>
+            <JuicyButton onPress={() => updateCart(item.id, -1)} scaleTo={0.8}>
+              <Minus size={18} color="white" />
+            </JuicyButton>
+
+            <Text style={{ marginHorizontal: 10, color: "white" }}>
+              {cart[item.id]}
+            </Text>
+
+            <JuicyButton onPress={() => updateCart(item.id, 1)} scaleTo={0.8}>
+              <Plus size={18} color="white" />
+            </JuicyButton>
+          </View>
+        ) : (
+          <JuicyButton
+            onPress={() => updateCart(item.id, 1)}
+            style={styles.addBtn}
+            scaleTo={0.9}
+          >
+            <Text style={{ color: "black", fontWeight: "bold" }}>
+              ADD
+            </Text>
+          </JuicyButton>
+        )
+      ) : (
+        <View
+          style={{
+            backgroundColor: "#333",
+            padding: 8,
+            borderRadius: 8
+          }}
+        >
+          <Text
+            style={{
+              color: "#888",
+              fontSize: 10,
+              fontWeight: "bold"
+            }}
+          >
+            SOLD OUT
+          </Text>
+        </View>
+      )}
+    </View>
+  )}
 />
       {Object.keys(cart).length > 0 && (
           <JuicyButton onPress={() => setShowCheckout(true)} style={styles.floatingBtn} scaleTo={0.95}>
@@ -1284,7 +1394,17 @@ setTimeout(() => setShowConfetti(false), 3000);
                   data={myOrders} 
                   keyExtractor={item => item.id} 
                   contentContainerStyle={{padding: 20}} 
-                  refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchMyOrders} tintColor="#00E676" />} 
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={async () => {
+                        setRefreshing(true);
+                        await fetchMyOrders();
+                        setRefreshing(false);
+                      }}
+                      tintColor="#00E676"
+                    />
+                  }
                   ListEmptyComponent={<Text style={{textAlign:'center', color:'#888', marginTop:50}}>No orders yet.</Text>} 
                   renderItem={({item}) => (
                       <View style={[styles.card, {backgroundColor: colors.card, borderColor: item.status === 'ready' ? '#00E676' : 'transparent', borderWidth: 1}]}>
@@ -1293,7 +1413,7 @@ setTimeout(() => setShowConfetti(false), 3000);
                               
                           </View>
                           {item.status !== 'cancelled' && (
-  <View style={{ marginBottom: 30 }}>
+  <View style={{ marginBottom: 100 }}>
     {(() => {
       const steps = getSteps(item.order_type);
       const currentIndex = getStepIndex(item.status, item.order_type);
